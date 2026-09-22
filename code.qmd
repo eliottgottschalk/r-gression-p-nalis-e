@@ -10,15 +10,25 @@ library(readxl)
 ```
 
 ```{r}
-
 base <- read.csv("balanced_can_md.csv")
+table <- read_xlsx("Table_can_md.xlsx")
 str(base)
 
 #sélection de la plage de données
 base <- base %>%
   filter(Date >= as.Date("1990-01-01"),
          Date <= as.Date("2026-06-01"))
-base<- base %>% 
-  filter(Region=="CAN")
+
+var_can<- table %>% 
+  filter(Region=="CAN") |> 
+  pull(Variable)
+
+var_can <- var_can[var_can %in% names(base)]
+
+base <- base |>
+  select(Date, all_of(var_can))
+
+str(base)
+
 ```
 

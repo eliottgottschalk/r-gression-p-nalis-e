@@ -139,48 +139,4 @@ corrplot(matrice_filtre, method = "circle", type = "upper", diag = FALSE, tl.cex
 ```
 
 
-```{r}
-# Seuils
-seuil_forte_corr <- 0.9
-seuil_corr_dep <- 0.1 
-
-# Variables fortement corrélées entre elles
-matrice_cor <- base |> select(-c(Date,hstart_CAN_new )) |> 
-  cor(use = "pairwise.complete.obs")
-diag(matrice_cor) <- NA
-
-vars_forte_co <- apply(matrice_cor, 1, function(x) any(abs(x) > seuil_forte_corr, na.rm = TRUE))
-variables_forte_corr <- names(vars_forte_co)[vars_forte_co]
-
-# Corrélation avec la variable dépendante
-cor_dep <- cor(base |> select(-c(Date)), use = "pairwise.complete.obs")[, "hstart_CAN_new"]
-
-# Filtre des variables avec corrélation absolue ≥ seuil_corr_dep
-vars_corr_dep <- names(cor_dep)[abs(cor_dep) >= seuil_corr_dep]
-
-vars_intersection <- intersect(variables_forte_corr, vars_corr_dep)
-
-# Tableau
-tab <- data.frame(
-  Corr_avec_IPPI = cor_dep[vars_intersection]
-)
-
-tab$Moy_corr_forte <- sapply(vars_intersection, function(var){
-  autres <- setdiff(variables_forte_corr, var)
-  mean(abs(matrice_cor[var, autres]), na.rm = TRUE)
-})
-
-# Tri par corrélation absolue avec la variable dépendante
-tab <- tab |> arrange(desc(abs(Corr_avec_IPPI)))
-
-tab |>
-  kable(
-    col.names = c("Variable", "Corrélation avec hstart_CAN_new", "Moyenne corrélations fortes"),
-    caption = paste0("Variables fortement corrélées entre elles (≥ ", seuil_forte_corr,
-                     ") et corrélées avec la variable dépendante (≥ ", seuil_corr_dep, ")"),
-    digits = 3
-  ) |>
-  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
-```
-
 # II. Sélection des variables

@@ -7,6 +7,11 @@ editor: visual
 ```{r}
 library(dplyr)
 library(readxl)
+library(naniar)
+library(corrplot)
+library(knitr)
+library(kableExtra)
+library(EnvStats)
 ```
 
 ```{r}
@@ -32,3 +37,136 @@ str(base)
 
 ```
 
+# I. Analyses exploratoire et descriptive
+## Analyse des valeurs manquante 
+
+```{r, warning=FALSE}
+gg_miss_upset(base)
+```
+5 variables avec des valeurs manquantes, soit 69 valeurs manquantes présentent au même endroit pour chacunes d'entre elles. 
+
+## Graphique de la variable à expliquer 
+
+```{r}
+# Création de la ts
+yy <- ts(base$hstart_CAN_new, start=c(1990,01), frequency=12)
+
+# Graphique de la série
+plot.ts(yy, main = "Évolution du taux de croissance des mises en chantier au Canada (1990-2026)", ylab = "Taux de croissance", xlab = "Année")
+
+# Calcul et visualisation de la moyenne
+moyenne <- mean(yy, na.rm = TRUE)
+abline(h = moyenne, col = "red", lwd = 2, lty = 2)
+```
+On observe visuellement que la série oscille autour d'une moyenne proche de zéro, avec une variance qui semble globalement stable (caractéristique d'une série stationnarisée par transformation), tout en affichant quelques pics de volatilité plus marqués, notamment autour de certaines périodes économiques ou récentes (comme en 2020-2023).
+
+## Statistique descriptives 
+
+```{r}
+summary(base$hstart_CAN_new)
+```
+Le taux de croissance des nouvelles constructions est centré autour de zéro de par la moyenne. 50% des observations correspondent à des variations relatives comprises entre - 5.62% et 6.92% tandis que les valeurs extrêmes sont respectivement une baisse ou hausse d'environ -25.3% et 46% du nombre de maison construites. Il semblerait donc y avoir une période de l'année plus propice à la construction de maison.
+
+```{r}
+hist(base$hstart_CAN_new)
+```
+L'histogramme nous le confirme avec une forte concentration des taux autour de 0, le nombre de maisons construites varie peu d'un mois à l'autre. Il y a cependant des périodes distinctes où le taux de variation augmente ou baisse beaucoup.
+
+```{r}
+boxplot(base$hstart_CAN_new)
+```
+Quelques points visible sur le graphique, une verification avec le test de Rosner est donc appliqué.
+
+```{r}
+rosner <- rosnerTest(yy, k = 16)
+
+print(rosner)
+```
+
+Pas de valeurs abberrante ou atypique selon le test de rosner 
+
+## Corrélation entre les variables à explicatives et la variable à expliquer, et entre les variables explicatives
+
+Spearman  car relation linéaire c'est mieux 
+
+### Corrélation entre les variables explicatives et la variable à expliquer
+
+```{r}
+seuil_cor <- 0.1
+
+cor_dep <- cor(base |> select(-c(Date)), use = "pairwise.complete.obs")[, "hstart_CAN_new"]
+
+cor_dep_filtre <- cor_dep[abs(cor_dep) >= seuil_cor]
+
+pal <- colorRampPalette(c("blue", "white", "red"))
+cols <- pal(100)[as.numeric(cut(cor_dep_filtre, breaks = 100))]
+
+par(mar = c(12, 4, 4, 2))
+
+barplot(cor_dep_filtre, las = 2, col = cols,
+        main = paste0("Variables explicatives avec corrélation ≥ ", seuil_cor, " avec hstart_CAN_new"),
+        ylab = "Corrélation", cex.names = 0.8)
+```
+
+### Corrélation entre les variables explicatives
+
+```{r}
+seuil <- 0.9
+
+matrice_cor <- base |>
+  select(-c(Date,hstart_CAN_new )) |>
+  cor(use = "pairwise.complete.obs")
+diag(matrice_cor) <- NA
+
+vars_forte_co <- apply(matrice_cor, 1, function(x) any(abs(x) > seuil, na.rm = TRUE))
+matrice_filtre <- matrice_cor[vars_forte_co, vars_forte_co]
+
+corrplot(matrice_filtre, method = "circle", type = "upper", diag = FALSE, tl.cex = 0.7)
+```
+
+
+```{r}
+# Seuils
+seuil_forte_corr <- 0.9
+seuil_corr_dep <- 0.1 
+
+# Variables fortement corrélées entre elles
+matrice_cor <- base |> select(-c(Date,hstart_CAN_new )) |> 
+  cor(use = "pairwise.complete.obs")
+diag(matrice_cor) <- NA
+
+vars_forte_co <- apply(matrice_cor, 1, function(x) any(abs(x) > seuil_forte_corr, na.rm = TRUE))
+variables_forte_corr <- names(vars_forte_co)[vars_forte_co]
+
+# Corrélation avec la variable dépendante
+cor_dep <- cor(base |> select(-c(Date)), use = "pairwise.complete.obs")[, "hstart_CAN_new"]
+
+# Filtre des variables avec corrélation absolue ≥ seuil_corr_dep
+vars_corr_dep <- names(cor_dep)[abs(cor_dep) >= seuil_corr_dep]
+
+vars_intersection <- intersect(variables_forte_corr, vars_corr_dep)
+
+# Tableau
+tab <- data.frame(
+  Corr_avec_IPPI = cor_dep[vars_intersection]
+)
+
+tab$Moy_corr_forte <- sapply(vars_intersection, function(var){
+  autres <- setdiff(variables_forte_corr, var)
+  mean(abs(matrice_cor[var, autres]), na.rm = TRUE)
+})
+
+# Tri par corrélation absolue avec la variable dépendante
+tab <- tab |> arrange(desc(abs(Corr_avec_IPPI)))
+
+tab |>
+  kable(
+    col.names = c("Variable", "Corrélation avec hstart_CAN_new", "Moyenne corrélations fortes"),
+    caption = paste0("Variables fortement corrélées entre elles (≥ ", seuil_forte_corr,
+                     ") et corrélées avec la variable dépendante (≥ ", seuil_corr_dep, ")"),
+    digits = 3
+  ) |>
+  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
+```
+
+# II. Sélection des variables

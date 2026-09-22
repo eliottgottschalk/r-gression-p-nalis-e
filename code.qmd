@@ -5,6 +5,20 @@ editor: visual
 ---
 
 ```{r}
+library(dplyr)
+library(readxl)
+```
+
+```{r}
+
 base <- read.csv("balanced_can_md.csv")
+str(base)
+
+#sélection de la plage de données
+base <- base %>%
+  filter(Date >= as.Date("1990-01-01"),
+         Date <= as.Date("2026-06-01"))
+base<- base %>% 
+  filter(Region=="CAN")
 ```
 

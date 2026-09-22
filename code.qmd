@@ -3,3 +3,8 @@ title: "Untitled"
 format: html
 editor: visual
 ---
+
+```{r}
+base <- read.csv("balanced_can_md.csv")
+```
+

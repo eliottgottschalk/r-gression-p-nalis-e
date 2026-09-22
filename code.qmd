@@ -14,6 +14,7 @@ library(kableExtra)
 library(EnvStats)
 ```
 
+# Pré-traitement 
 ```{r}
 base <- read.csv("balanced_can_md.csv")
 table <- read_xlsx("Table_can_md.xlsx")
@@ -91,31 +92,44 @@ Spearman  car relation linéaire c'est mieux
 
 ### Corrélation entre les variables explicatives et la variable à expliquer
 
+
 ```{r}
 seuil_cor <- 0.1
 
-cor_dep <- cor(base |> select(-c(Date)), use = "pairwise.complete.obs")[, "hstart_CAN_new"]
+# 1. Calculer la corrélation de chaque variable explicative avec hstart_CAN_new
+cor_dep <- sapply(base %>% select(-c(Date, hstart_CAN_new)), function(x) {
+  cor(x, base$hstart_CAN_new, use = "pairwise.complete.obs")
+})
 
+# 2. Filtrer selon le seuil et trier
 cor_dep_filtre <- cor_dep[abs(cor_dep) >= seuil_cor]
+cor_dep_filtre <- sort(cor_dep_filtre)
 
-pal <- colorRampPalette(c("blue", "white", "red"))
+# 3. Palette de couleurs (Orange / Bleu)
+pal <- colorRampPalette(c("#D95F02", "#F7F7F7", "#2B5C8F"))
 cols <- pal(100)[as.numeric(cut(cor_dep_filtre, breaks = 100))]
 
-par(mar = c(12, 4, 4, 2))
+# 4. Ajuster la marge de gauche pour les noms longs
+par(mar = c(4, 14, 4, 2)) 
 
-barplot(cor_dep_filtre, las = 2, col = cols,
-        main = paste0("Variables explicatives avec corrélation ≥ ", seuil_cor, " avec hstart_CAN_new"),
-        ylab = "Corrélation", cex.names = 0.8)
+# 5. Graphique en barres horizontales
+barplot(cor_dep_filtre, horiz = TRUE, las = 1, col = cols,
+        main = paste0("Variables corrélées avec hstart_CAN_new (|r| ≥ ", seuil_cor, ")"),
+        xlab = "Coefficient de corrélation", cex.names = 0.75)
+
+# Ligne verticale de repère à 0
+abline(v = 0, col = "grey40", lty = 2)
 ```
 
 ### Corrélation entre les variables explicatives
+
 
 ```{r}
 seuil <- 0.9
 
 matrice_cor <- base |>
   select(-c(Date,hstart_CAN_new )) |>
-  cor(use = "pairwise.complete.obs")
+  cor(use = "pairwise.complete.obs",method = "spearman")
 diag(matrice_cor) <- NA
 
 vars_forte_co <- apply(matrice_cor, 1, function(x) any(abs(x) > seuil, na.rm = TRUE))

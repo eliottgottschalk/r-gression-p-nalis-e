@@ -12,6 +12,13 @@ library(corrplot)
 library(knitr)
 library(kableExtra)
 library(EnvStats)
+library(glmnet) 
+library(foreach)
+library(doParallel)
+library(lgarch)	
+library(gets)
+library(glmnet)
+library(ncvreg)
 ```
 
 # Pré-traitement 
@@ -45,6 +52,19 @@ str(base)
 gg_miss_upset(base)
 ```
 5 variables avec des valeurs manquantes, soit 69 valeurs manquantes présentent au même endroit pour chacunes d'entre elles. 
+
+on supprime les 5 variables car il y a un risque de multicolinéaroté avec les nouvelles variables active.
+
+```{r}
+base <- base |>
+  dplyr::select(
+    -CRED_T_discontinued,
+    -CRED_HOUS_discontinued,
+    -CRED_MORT_discontinued,
+    -CRED_CONS_discontinued,
+    -CRE_BUS_discontinued
+  )
+```
 
 ## Graphique de la variable à expliquer 
 
@@ -140,3 +160,384 @@ corrplot(matrice_filtre, method = "circle", type = "upper", diag = FALSE, tl.cex
 
 
 # II. Sélection des variables
+
+## 5) Régressions pénalisées : Ridge, Lasso, Elastic-Net, SCAD et Adaptive Lasso
+
+```{r}
+registerDoParallel(cores = 4)
+training_dlbase <- base
+data.frame(training_dlbase)
+
+# standardized y and x (centered and standardized)
+y <- data.frame(training_dlbase) |>
+  select(hstart_CAN_new) |>
+  scale(center = T, scale = T) |>
+  as.matrix()
+
+x <- data.frame(training_dlbase) |>
+  select (-hstart_CAN_new, -Date) |>
+  scale(center = T, scale = T) |>
+  as.matrix()
+```
+
+### Ridge
+
+```{r}
+# Ridge regression
+set.seed(1)	# for reproductability
+
+lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
+# alpha = 0, implementation of Ridge regression
+ridge_cv <- cv.glmnet(x, y, alpha = 0, lambda = lambdas_to_try, standardize = T, nfolds = 10) 
+par(mfrow=c(1,1))
+plot(ridge_cv,)
+
+# Best lambda obtained from CV (lambda.min) - other possibility: lambda.1se
+lambda_cv_ridge <- ridge_cv$lambda.min
+lambda_cv_ridge
+
+# Evaluation of the final model with the selected lambda
+model_cv_ridge <- glmnet(x, y, alpha = 0, lambda = lambda_cv_ridge, standardize = T)
+summary(model_cv_ridge)
+
+# Ridge betas
+model_cv_ridge$beta
+```
+
+### Lasso
+
+```{r}
+# LASSO regression
+set.seed(1)	# for reproductability
+
+lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
+# alpha = 1, implementation of Lasso regression
+lasso_cv <- cv.glmnet(x, y, alpha = 1, lambda = lambdas_to_try, standardize = T, nfolds = 10) 
+plot(lasso_cv)
+
+# Best lambda obtained from CV (lambda.min) - other possibility: lambda.1se
+lambda_cv_lasso <- lasso_cv$lambda.min
+lambda_cv_lasso
+
+# Evaluation of the final model with the selected lambda
+model_cv_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_lasso, standardize = T)
+
+# Lasso betas
+model_cv_lasso$beta
+
+# Get the name of relevant variables
+which(! coef(model_cv_lasso) == 0, arr.ind = TRUE)
+```
+
+### Elastic-Net
+
+```{r}
+# Elastic-Net regression with alpha = 0.5
+set.seed(1)	# for reproductability
+lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
+en_cv <- cv.glmnet(x, y, alpha = 0.5, lambda = lambdas_to_try, standardize = T, nfolds = 10) 
+
+# Figures of lambdas
+plot(en_cv)
+
+# Best lambda obtained from CV (lambda.min) - other possibility: lambda.1se
+lambda_cv_en <- en_cv$lambda.min
+lambda_cv_en
+
+# Evaluation of the final model with the selected lambda
+model_cv_en <- glmnet(x, y, alpha = 0.5, lambda = lambda_cv_en, standardize = T)
+
+# EN betas
+model_cv_en$beta
+
+# Get the name of relevant variables
+which(! coef(model_cv_en) == 0, arr.ind = TRUE)
+```
+
+### SCAD
+
+```{r}
+# SCAD
+set.seed(1)	# for reproductability
+
+fit_SCAD=ncvreg(x, y, penalty = c("SCAD"))
+summary(fit_SCAD, lambda=0.10)
+plot(fit_SCAD)
+
+# Validation croisé pour le meilleur lambda 
+cvfit_SCAD=cv.ncvreg(x, y, penalty = c("SCAD"))
+plot(cvfit_SCAD)
+
+# On attribue le meilleur lambda 
+lambda_SCAD <- cvfit_SCAD$lambda.min
+lambda_SCAD
+
+#Modele finale 
+SCAD_Final=ncvreg(x, y, lambda=lambda_SCAD, alpha = 1)
+SCAD_Final$beta
+
+which(! coef(SCAD_Final) == 0, arr.ind = TRUE)
+```
+
+### Adaptive Lasso
+
+#### Adaptive Lasso - Ridge
+
+```{r}
+# Adaptive Lasso regression using Ridge to compute the weights in the first step
+set.seed(1)	# for reproductability
+
+# Define the weights from Ridge regression
+lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
+ridge_cv <- cv.glmnet(x, y, alpha = 0, lambda = lambdas_to_try, standardize = T, nfolds = 10) 
+lambda_cv <- ridge_cv$lambda.min
+model_cv <- glmnet(x, y, alpha = 0, lambda = lambda_cv, standardize = T)
+coef_ridge <- predict(model_cv,type="coef",s=lambda_cv)
+
+# Weighted with gamma = 0.5
+gamma = 0.5
+w0 <- 1/(abs(coef_ridge) + (1/length(y)))
+poids.ridge <- w0^(gamma)
+poids.ridge <- poids.ridge[2:nrow(poids.ridge),]
+poids.ridge <- Matrix(poids.ridge)
+
+# Adaptive LASSO
+fit_adalasso_r <- glmnet(x, y, penalty.factor =poids.ridge)
+fit_cv_adalasso_r <- cv.glmnet(x, y,penalty.factor=poids.ridge)
+plot(fit_cv_adalasso_r)
+
+# Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
+lambda_cv_adalasso_r <- fit_cv_adalasso_r$lambda.1se
+lambda_cv_adalasso_r
+
+# Evaluation of the final model with the selected lambda
+model_cv_adalasso_r <- glmnet(x, y, alpha = 1, lambda = lambda_cv_adalasso_r, standardize = T)
+
+# Lasso betas
+model_cv_adalasso_r$beta
+
+# Get the name of relevant variables
+which(! coef(model_cv_adalasso_r) == 0, arr.ind = TRUE)
+```
+
+#### Adaptive Lasso - Lasso
+
+```{r}
+# Adaptive Lasso regression using Lasso to compute the weights in the first step
+set.seed(1)	# for reproductability
+model_cv <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
+coef_lasso<-predict(model_cv,type="coef",s=lambda_cv)
+# Weighted with gamma = 0.5
+gamma=0.5
+w0<-1/(abs(coef_lasso) + (1/length(y)))
+poids.lasso<-w0^(gamma)
+poids.lasso <- poids.lasso[2:nrow(poids.lasso),]
+poids.lasso <- Matrix(poids.lasso)
+
+# Adaptive LASSO
+fit_adalasso <- glmnet(x, y, penalty.factor =poids.lasso)
+fit_cv_adalasso<-cv.glmnet(x, y,penalty.factor=poids.lasso)
+
+# Figure of lambdas 
+plot(fit_cv_adalasso)
+
+# Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
+lambda_cv_adalasso <- fit_cv_adalasso$lambda.1se
+lambda_cv_adalasso
+# Evaluation of the final model with the selected lambda
+model_cv_adalasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_adalasso, standardize = T, penalty.factor = poids.lasso)
+
+# Lasso betas
+model_cv_adalasso$beta
+
+# Get the name of relevant variables
+which(! coef(model_cv_adalasso) == 0, arr.ind = TRUE)
+```
+
+## 6) Approche de réduction de dimension + régressions pénalisées
+
+```{r}
+# Pas à faire car dossier seule.
+```
+
+## 7) Comparaison sous forme de tableau des variables sélectionnées par les différentes approches en reportant ces variables sélectionnées estimées par les MCO
+
+### Tableau des hyperparamètres
+
+```{r}
+hyperparam_wide <- data.frame(
+  Paramètre = c("Lambda", "Alpha"),
+  Ridge = c(round(lambda_cv_ridge, 5), 0),
+  Lasso = c(round(lambda_cv_lasso, 5), 1),
+  `Elastic-Net` = c(round(lambda_cv_en, 5), 0.5),
+  SCAD = c(round(lambda_SCAD, 5), 1),
+  `Adaptive Lasso Lasso` = c(round(lambda_cv_adalasso, 5), 1),
+  `Adaptive Lasso Ridge` = c(round(lambda_cv_adalasso_r, 5), 1)
+)
+
+hyperparam_wide |>
+  kable(
+    caption = "Hyperparamètres sélectionnés par validation croisée pour chaque méthode pénalisée",
+    digits = 5
+  ) |>
+  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
+```
+
+### Tableau des coefficients des Beta + MCO
+
+```{r}
+# Estimation du modèle MCO
+lm <- lm(y ~ x)
+summary_mco <- summary(lm)
+
+# Extraction des coefficients et p-values avec retrait de l'intercept
+coefs_mco <- summary_mco$coefficients[-1, , drop = FALSE]
+var_names <- colnames(x)
+rownames(coefs_mco) <- var_names
+
+# Préparation du tableau MCO uniquement pour les coefficients significatifs
+mco_df <- data.frame(
+  Variable = rownames(coefs_mco),
+  Coefficient = coefs_mco[, "Estimate"],
+  p_value = coefs_mco[, "Pr(>|t|)"]
+) |>
+  mutate(
+    Significance = case_when(
+      p_value < 0.01 ~ "***",
+      p_value < 0.05 ~ "**",
+      p_value < 0.10 ~ "*",
+      TRUE ~ ""
+    ),
+    `Coeff. (MCO)` = ifelse(
+      p_value < 0.10,
+      paste0(round(Coefficient, 4), Significance),
+      "" 
+    )
+  ) |>
+  select(Variable, `Coeff. (MCO)`)
+
+# Extraction des coefficients des méthodes pénalisées
+get_beta_glmnet <- function(model, var_names, lambda){
+  beta <- as.vector(coef(model, s = lambda))
+  beta <- beta[-1]
+  names(beta) <- var_names
+  return(beta)
+}
+
+beta_ridge <- get_beta_glmnet(model_cv_ridge, var_names, lambda = ridge_cv$lambda.min)
+beta_lasso <- get_beta_glmnet(model_cv_lasso, var_names, lambda = lasso_cv$lambda.min)
+beta_en    <- get_beta_glmnet(model_cv_en, var_names, lambda = en_cv$lambda.min)
+beta_adalasso <- get_beta_glmnet(model_cv_adalasso, var_names, lambda = fit_cv_adalasso$lambda.1se)
+beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.1se)
+
+beta_scad <- as.vector(SCAD_Final$beta[-1])
+names(beta_scad) <- var_names
+
+# Tableau complet
+compar_tab <- data.frame(
+  `MCO` = mco_df$`Coeff. (MCO)`[match(var_names, mco_df$Variable)],
+  Ridge = round(beta_ridge, 4),
+  Lasso = round(beta_lasso, 4),
+  `Elastic Net` = round(beta_en, 4),
+  SCAD = round(beta_scad, 4),
+  `Adaptive Lasso (Lasso)` = round(beta_adalasso, 4),
+  `Adaptive Lasso (Ridge)` = round(beta_adalasso_r, 4),
+  check.names = FALSE
+)
+
+compar_tab <- compar_tab |>
+  mutate(across(everything(), ~ ifelse(. == 0, "", .)))
+
+compar_tab |>
+  kable(
+    caption = "Comparaison des coefficients estimés par différentes méthodes pénalisées (avec significativité MCO au seuil de 10%)",
+    digits = 4
+  ) |>
+  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
+```
+
+# Tableau oral
+
+```{r}
+# Estimation du modèle MCO
+lm <- lm(y ~ x)
+summary_mco <- summary(lm)
+
+# Extraction des coefficients et p-values avec retrait de l'intercept
+coefs_mco <- summary_mco$coefficients[-1, , drop = FALSE]
+var_names <- colnames(x)
+rownames(coefs_mco) <- var_names
+
+# Préparation du tableau MCO uniquement pour les coefficients significatifs
+mco_df <- data.frame(
+  Variable = rownames(coefs_mco),
+  Coefficient = coefs_mco[, "Estimate"],
+  p_value = coefs_mco[, "Pr(>|t|)"]
+) |>
+  mutate(
+    Significance = case_when(
+      p_value < 0.01 ~ "***",
+      p_value < 0.05 ~ "**",
+      p_value < 0.10 ~ "*",
+      TRUE ~ ""
+    ),
+    `Coeff. (MCO)` = ifelse(
+      p_value < 0.10,
+      paste0(round(Coefficient, 4), Significance),
+      ""
+    )
+  ) |>
+  select(Variable, `Coeff. (MCO)`)
+
+# Extraction des coefficients des méthodes pénalisées
+get_beta_glmnet <- function(model, var_names, lambda){
+  beta <- as.vector(coef(model, s = lambda))
+  beta <- beta[-1]
+  names(beta) <- var_names
+  return(beta)
+}
+
+beta_ridge <- get_beta_glmnet(model_cv_ridge, var_names, lambda = ridge_cv$lambda.min)
+beta_lasso <- get_beta_glmnet(model_cv_lasso, var_names, lambda = lasso_cv$lambda.min)
+beta_en    <- get_beta_glmnet(model_cv_en, var_names, lambda = en_cv$lambda.min)
+beta_adalasso <- get_beta_glmnet(model_cv_adalasso, var_names, lambda = fit_cv_adalasso$lambda.1se)
+beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.1se)
+
+beta_scad <- as.vector(SCAD_Final$beta[-1])
+names(beta_scad) <- var_names
+
+# Tableau complet
+compar_tab <- data.frame(
+  Variable = var_names,
+  `MCO` = mco_df$`Coeff. (MCO)`[match(var_names, mco_df$Variable)],
+  Ridge = round(beta_ridge, 4),
+  Lasso = round(beta_lasso, 4),
+  `Elastic Net` = round(beta_en, 4),
+  SCAD = round(beta_scad, 4),
+  `Adaptive Lasso (Lasso)` = round(beta_adalasso, 4),
+  `Adaptive Lasso (Ridge)` = round(beta_adalasso_r, 4),
+  check.names = FALSE
+)
+
+# ---- 🔍 Filtrage : ne garder que les variables sélectionnées par AU MOINS UNE méthode autre que Ridge ----
+compar_tab_filtered <- compar_tab |>
+  filter(
+    (`Lasso` != 0) |
+    (`Elastic Net` != 0) |
+    (`SCAD` != 0) |
+    (`Adaptive Lasso (Lasso)` != 0) |
+    (`Adaptive Lasso (Ridge)` != 0)
+  )
+
+# Optionnel : remplacer les 0 restants par vide pour lisibilité
+compar_tab_filtered <- compar_tab_filtered |>
+  mutate(across(-Variable, ~ ifelse(. == 0, "", .)))
+
+# Affichage du tableau final
+compar_tab_filtered |>
+  kable(
+    caption = "Comparaison des coefficients estimés par différentes méthodes pénalisées (variables sélectionnées par au moins une méthode autre que Ridge)",
+    digits = 4
+  ) |>
+  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
+```

@@ -206,7 +206,7 @@ model_cv_ridge$beta
 #---------------------------------------------------------------------
 # Erreur de validation croisee (out-of-sample) au lambda optimal
 ridge_cv_mse <- min(ridge_cv$cvm)   # equivalent a ridge_cv$cvm[ridge_cv$lambda == lambda_cv]
-lasso_cv_mse
+ridge_cv_mse
 
 #---------------------------------------------------------------------
 # R2 in-sample du modele final

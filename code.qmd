@@ -202,6 +202,31 @@ summary(model_cv_ridge)
 
 # Ridge betas
 model_cv_ridge$beta
+
+#---------------------------------------------------------------------
+# Erreur de validation croisee (out-of-sample) au lambda optimal
+ridge_cv_mse <- min(ridge_cv$cvm)   # equivalent a ridge_cv$cvm[ridge_cv$lambda == lambda_cv]
+lasso_cv_mse
+
+#---------------------------------------------------------------------
+# R2 in-sample du modele final
+# ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
+# comparer a un autre modele retenant plus/moins de variables
+y_hat <- predict(model_cv, newx = x)
+r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample
+
+#---------------------------------------------------------------------
+# Tableau recapitulatif pour le ridge 
+resultats_ridge <- data.frame(
+  methode      = "ridge",
+  lambda       = lambda_cv,
+  nb_variables = sum(model_cv$beta != 0),
+  cv_mse       = ridge_cv_mse,
+  r2_in_sample = r2_in_sample
+)
+resultats_ridge
+
 ```
 
 ### Lasso
@@ -227,6 +252,35 @@ model_cv_lasso$beta
 
 # Get the name of relevant variables
 which(! coef(model_cv_lasso) == 0, arr.ind = TRUE)
+
+# Alternative : affiche directement les noms de variables
+# avec leur coefficient, au lieu de simples indices de ligne/colonne
+coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
+
+#---------------------------------------------------------------------
+# Erreur de validation croisee (out-of-sample) au lambda optimal
+lasso_cv_mse <- min(lasso_cv$cvm)   # equivalent a lasso_cv$cvm[lasso_cv$lambda == lambda_cv]
+lasso_cv_mse
+
+#---------------------------------------------------------------------
+# R2 in-sample du modele final
+# ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
+# comparer a un autre modele retenant plus/moins de variables
+y_hat <- predict(model_cv, newx = x)
+r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample
+
+#---------------------------------------------------------------------
+# Tableau recapitulatif pour lasso 
+resultats_lasso <- data.frame(
+  methode      = "Lasso",
+  lambda       = lambda_cv,
+  nb_variables = sum(model_cv$beta != 0),
+  cv_mse       = lasso_cv_mse,
+  r2_in_sample = r2_in_sample
+)
+resultats_lasso
+
 ```
 
 ### Elastic-Net, 
@@ -374,6 +428,33 @@ SCAD_Final=ncvreg(x, y, lambda=lambda_SCAD, alpha = 1)
 SCAD_Final$beta
 
 which(! coef(SCAD_Final) == 0, arr.ind = TRUE)
+
+# Alternative plus lisible : affiche directement les noms de variables
+# avec leur coefficient, au lieu de simples indices de ligne/colonne
+coef(SCAD_Final)[coef(SCAD_Final) != 0]
+
+# Erreur de validation croisee (out-of-sample) au lambda optimal
+scad_cv_mse <- cvfit_SCAD$cve[cvfit_SCAD$min]
+scad_cv_mse
+
+# R2 in-sample du modele final
+# ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
+# comparer a un autre modele retenant plus/moins de variables
+y_hat_scad <- predict(SCAD_Final, X = x)
+r2_in_sample_scad <- 1 - sum((y - y_hat_scad)^2) / sum((y - mean(y))^2)
+r2_in_sample_scad
+
+# Tableau recapitulatif pour SCAD
+resultats_scad <- data.frame(
+  methode      = "SCAD",
+  lambda       = lambda_SCAD,
+  nb_variables = sum(SCAD_Final$beta != 0) - 1,   # -1 pour exclure l'intercept
+  cv_mse       = scad_cv_mse,
+  r2_in_sample = r2_in_sample_scad
+)
+resultats_scad
+
+
 ```
 
 ### Adaptive Lasso
@@ -415,6 +496,32 @@ model_cv_adalasso_r$beta
 
 # Get the name of relevant variables
 which(! coef(model_cv_adalasso_r) == 0, arr.ind = TRUE)
+
+# Alternative : affiche directement les noms de variables
+# avec leur coefficient, au lieu de simples indices de ligne/colonne
+coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
+
+# Erreur de validation croisee (out-of-sample) au lambda optimal
+alasso_cv_mse <- min(fit_cv_adalasso$cvm)   # equivalent a fit_cv_adalasso$cvm[fit_cv_adalasso$lambda == lambda_cv]
+alasso_cv_mse
+
+# R2 in-sample du modele final
+# ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
+# comparer a un autre modele retenant plus/moins de variables
+y_hat <- predict(model_cv, newx = x)
+r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample
+
+# Tableau recapitulatif pour alasso 
+resultats_alasso <- data.frame(
+  methode      = "aLasso-Ridge",
+  lambda       = lambda_cv,
+  nb_variables = sum(model_cv$beta != 0),
+  cv_mse       = alasso_cv_mse,
+  r2_in_sample = r2_in_sample
+)
+resultats_alasso
+
 ```
 
 #### Adaptive Lasso - Lasso
@@ -422,7 +529,7 @@ which(! coef(model_cv_adalasso_r) == 0, arr.ind = TRUE)
 ```{r}
 # Adaptive Lasso regression using Lasso to compute the weights in the first step
 set.seed(1)	# for reproductability
-model_cv <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
+model_cv_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
 coef_lasso<-predict(model_cv,type="coef",s=lambda_cv)
 # Weighted with gamma = 0.5
 gamma=0.5
@@ -433,22 +540,47 @@ poids.lasso <- Matrix(poids.lasso)
 
 # Adaptive LASSO
 fit_adalasso <- glmnet(x, y, penalty.factor =poids.lasso)
-fit_cv_adalasso<-cv.glmnet(x, y,penalty.factor=poids.lasso)
+fit_cv_adalasso_lasso<-cv.glmnet(x, y,penalty.factor=poids.lasso)
 
 # Figure of lambdas 
 plot(fit_cv_adalasso)
 
 # Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
-lambda_cv_adalasso <- fit_cv_adalasso$lambda.1se
+lambda_cv_adalasso_lasso <- fit_cv_adalasso_lasso$lambda.1se
 lambda_cv_adalasso
 # Evaluation of the final model with the selected lambda
-model_cv_adalasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_adalasso, standardize = T, penalty.factor = poids.lasso)
+model_cv_adalasso_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_adalasso, standardize = T, penalty.factor = poids.lasso)
 
 # Lasso betas
-model_cv_adalasso$beta
+model_cv_adalasso_lasso$beta
 
 # Get the name of relevant variables
-which(! coef(model_cv_adalasso) == 0, arr.ind = TRUE)
+which(! coef(model_cv_adalasso_lasso) == 0, arr.ind = TRUE)
+
+#---------------------------------------------------------------------
+# Erreur de validation croisee (out-of-sample) au lambda optimal
+alasso_lasso_cv_mse_lasso <- min(fit_cv_adalasso_lasso$cvm)   # equivalent a fit_cv_adalasso$cvm[fit_cv_adalasso$lambda == lambda_cv]
+alasso_lasso_cv_mse_lasso
+
+#---------------------------------------------------------------------
+# R2 in-sample du modele final
+# ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
+# comparer a un autre modele retenant plus/moins de variables
+y_hat <- predict(model_cv_lasso, newx = x)
+r2_in_sample_lasso <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample_lasso
+
+#---------------------------------------------------------------------
+# Tableau recapitulatif pour alasso 
+resultats_alasso <- data.frame(
+  methode      = "aLasso-Lasso",
+  lambda       = lambda_cv_lasso,
+  nb_variables = sum(model_cv_lasso$beta != 0),
+  cv_mse       = alasso_lasso_cv_mse_lasso,
+  r2_in_sample = r2_in_sample_lasso
+)
+resultats_alasso
+
 ```
 
 

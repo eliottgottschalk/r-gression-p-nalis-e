@@ -229,11 +229,13 @@ model_cv_lasso$beta
 which(! coef(model_cv_lasso) == 0, arr.ind = TRUE)
 ```
 
-### Elastic-Net
+### Elastic-Net, 
+#### Fixed 
 
 ```{r}
 # Elastic-Net regression with alpha = 0.5
 set.seed(1)	# for reproductability
+
 lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
 en_cv <- cv.glmnet(x, y, alpha = 0.5, lambda = lambdas_to_try, standardize = T, nfolds = 10) 
 
@@ -241,18 +243,113 @@ en_cv <- cv.glmnet(x, y, alpha = 0.5, lambda = lambdas_to_try, standardize = T, 
 plot(en_cv)
 
 # Best lambda obtained from CV (lambda.min) - other possibility: lambda.1se
-lambda_cv_en <- en_cv$lambda.min
-lambda_cv_en
+lambda_cv <- en_cv$lambda.min
+lambda_cv
 
 # Evaluation of the final model with the selected lambda
-model_cv_en <- glmnet(x, y, alpha = 0.5, lambda = lambda_cv_en, standardize = T)
+model_cv <- glmnet(x, y, alpha = 0.5, lambda = lambda_cv, standardize = T)
 
 # EN betas
-model_cv_en$beta
+model_cv$beta
 
 # Get the name of relevant variables
-which(! coef(model_cv_en) == 0, arr.ind = TRUE)
+which(! coef(model_cv) == 0, arr.ind = TRUE)
+
+# Alternative : affiche directement les noms de variables
+# avec leur coefficient, au lieu de simples indices de ligne/colonne
+coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
+
+#---------------------------------------------------------------------
+# Erreur de validation croisee (out-of-sample) au lambda optimal
+en_cv_mse <- min(en_cv$cvm)   # equivalent a en_cv$cvm[en_cv$lambda == lambda_cv]
+en_cv_mse
+
+#---------------------------------------------------------------------
+# R2 in-sample du modele final
+# ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
+# comparer a un autre modele retenant plus/moins de variables
+y_hat <- predict(model_cv, newx = x)
+r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample
+
+#---------------------------------------------------------------------
+# Tableau recapitulatif pour EN
+resultats_en <- data.frame(
+  methode      = "EN",
+  lambda       = lambda_cv,
+  nb_variables = sum(model_cv$beta != 0),
+  cv_mse       = en_cv_mse,
+  r2_in_sample = r2_in_sample
+)
+resultats_en
+
 ```
+
+
+#### Gird search 
+
+```{r}
+# Elastic-Net regression with alpha based on dopar - warning: depend on the order of seq((0.1, 0.9, 0.05)
+# Choose alpha sequencially with 0 < alpha < 1: a = {0.1,0.2,...,0.9}
+set.seed(1)	# for reproductability
+en_min <- NULL
+lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
+alphalist <- seq(0.1,by=0.1)
+elasticnet <- lapply(alphalist, function(a){
+cv.glmnet(x, y, alpha=a, lambda = lambdas_to_try, standardize = T, nfolds = 10)
+})
+for (i in 1:9) {
+print(min(elasticnet[[i]]$cvm))
+en_min <- c(en_min, min(elasticnet[[i]]$cvm))
+}
+elasticnet_cvm <- min(en_min)
+elasticnet_cvm
+
+en_cv <- cv.glmnet(x, y, alpha = elasticnet_cvm, lambda = lambdas_to_try, standardize = T, nfolds = 10) 
+plot(en_cv)
+
+# Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
+lambda_cv <- en_cv$lambda.min
+lambda_cv
+
+# Evaluation of the final model with the selected lambda
+model_cv <- glmnet(x, y, alpha = elasticnet_cvm, lambda = lambda_cv, standardize = T)
+
+# EN betas
+model_cv$beta
+
+# Get the name of relevant variables
+which(! coef(model_cv) == 0, arr.ind = TRUE)  
+
+# Alternative : affiche directement les noms de variables
+# avec leur coefficient, au lieu de simples indices de ligne/colonne
+coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
+
+#---------------------------------------------------------------------
+# Erreur de validation croisee (out-of-sample) au lambda optimal
+en_cv_mse <- min(en_cv$cvm)   # equivalent a en_cv$cvm[en_cv$lambda == lambda_cv]
+en_cv_mse
+
+#---------------------------------------------------------------------
+# R2 in-sample du modele final
+y_hat <- predict(model_cv, newx = x)
+r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample
+
+#---------------------------------------------------------------------
+# Tableau recapitulatif pour EN
+resultats_en <- data.frame(
+  methode      = "EN Grid",
+  lambda       = lambda_cv,
+  nb_variables = sum(model_cv$beta != 0),
+  cv_mse       = en_cv_mse,
+  r2_in_sample = r2_in_sample
+)
+resultats_en
+
+
+```
+
 
 ### SCAD
 
@@ -354,11 +451,6 @@ model_cv_adalasso$beta
 which(! coef(model_cv_adalasso) == 0, arr.ind = TRUE)
 ```
 
-## 6) Approche de réduction de dimension + régressions pénalisées
-
-```{r}
-# Pas à faire car dossier seule.
-```
 
 ## 7) Comparaison sous forme de tableau des variables sélectionnées par les différentes approches en reportant ces variables sélectionnées estimées par les MCO
 

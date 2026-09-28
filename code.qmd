@@ -3,6 +3,9 @@ title: "Untitled"
 format: html
 editor: visual
 ---
+```{r}
+
+```
 
 ```{r}
 library(dplyr)
@@ -212,7 +215,7 @@ ridge_cv_mse
 # R2 in-sample du modele final
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
-y_hat <- predict(model_cv, newx = x)
+y_hat <- predict(model_cv_ridge, newx = x)
 r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample
 
@@ -220,8 +223,8 @@ r2_in_sample
 # Tableau recapitulatif pour le ridge 
 resultats_ridge <- data.frame(
   methode      = "ridge",
-  lambda       = lambda_cv,
-  nb_variables = sum(model_cv$beta != 0),
+  lambda       = lambda_cv_ridge,
+  nb_variables = sum(model_cv_ridge$beta != 0),
   cv_mse       = ridge_cv_mse,
   r2_in_sample = r2_in_sample
 )
@@ -266,7 +269,7 @@ lasso_cv_mse
 # R2 in-sample du modele final
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
-y_hat <- predict(model_cv, newx = x)
+y_hat <- predict(model_cv_lasso, newx = x)
 r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample
 
@@ -274,14 +277,15 @@ r2_in_sample
 # Tableau recapitulatif pour lasso 
 resultats_lasso <- data.frame(
   methode      = "Lasso",
-  lambda       = lambda_cv,
-  nb_variables = sum(model_cv$beta != 0),
+  lambda       = lambda_cv_lasso,
+  nb_variables = sum(model_cv_lasso$beta != 0),
   cv_mse       = lasso_cv_mse,
   r2_in_sample = r2_in_sample
 )
 resultats_lasso
 
 ```
+
 
 ### Elastic-Net, 
 #### Fixed 
@@ -328,8 +332,8 @@ r2_in_sample
 
 #---------------------------------------------------------------------
 # Tableau recapitulatif pour EN
-resultats_en <- data.frame(
-  methode      = "EN",
+resultats_en_fixed <- data.frame(
+  methode      = "EN, fixed",
   lambda       = lambda_cv,
   nb_variables = sum(model_cv$beta != 0),
   cv_mse       = en_cv_mse,
@@ -392,7 +396,7 @@ r2_in_sample
 
 #---------------------------------------------------------------------
 # Tableau recapitulatif pour EN
-resultats_en <- data.frame(
+resultats_en_gird <- data.frame(
   methode      = "EN Grid",
   lambda       = lambda_cv,
   nb_variables = sum(model_cv$beta != 0),
@@ -403,6 +407,8 @@ resultats_en
 
 
 ```
+
+
 
 
 ### SCAD
@@ -502,21 +508,21 @@ which(! coef(model_cv_adalasso_r) == 0, arr.ind = TRUE)
 coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
 
 # Erreur de validation croisee (out-of-sample) au lambda optimal
-alasso_cv_mse <- min(fit_cv_adalasso$cvm)   # equivalent a fit_cv_adalasso$cvm[fit_cv_adalasso$lambda == lambda_cv]
+alasso_cv_mse <- min(fit_cv_adalasso_r$cvm)   # equivalent a fit_cv_adalasso$cvm[fit_cv_adalasso$lambda == lambda_cv]
 alasso_cv_mse
 
 # R2 in-sample du modele final
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
-y_hat <- predict(model_cv, newx = x)
+y_hat <- predict(model_cv_adalasso_r, newx = x)
 r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample
 
 # Tableau recapitulatif pour alasso 
-resultats_alasso <- data.frame(
+resultats_alasso_ridge <- data.frame(
   methode      = "aLasso-Ridge",
   lambda       = lambda_cv,
-  nb_variables = sum(model_cv$beta != 0),
+  nb_variables = sum(model_cv_adalasso_r$beta != 0),
   cv_mse       = alasso_cv_mse,
   r2_in_sample = r2_in_sample
 )
@@ -546,7 +552,7 @@ fit_cv_adalasso_lasso<-cv.glmnet(x, y,penalty.factor=poids.lasso)
 plot(fit_cv_adalasso)
 
 # Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
-lambda_cv_adalasso_lasso <- fit_cv_adalasso_lasso$lambda.1se
+lambda_cv_adalasso_lasso <- fit_cv_adalasso_lasso$lambda.min
 lambda_cv_adalasso
 # Evaluation of the final model with the selected lambda
 model_cv_adalasso_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_adalasso, standardize = T, penalty.factor = poids.lasso)
@@ -566,16 +572,16 @@ alasso_lasso_cv_mse_lasso
 # R2 in-sample du modele final
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
-y_hat <- predict(model_cv_lasso, newx = x)
+y_hat <- predict(model_cv_adalasso_lasso, newx = x)
 r2_in_sample_lasso <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample_lasso
 
 #---------------------------------------------------------------------
 # Tableau recapitulatif pour alasso 
-resultats_alasso <- data.frame(
+resultats_alasso_lasso <- data.frame(
   methode      = "aLasso-Lasso",
   lambda       = lambda_cv_lasso,
-  nb_variables = sum(model_cv_lasso$beta != 0),
+  nb_variables = sum(model_cv_adalasso_lasso$beta != 0),
   cv_mse       = alasso_lasso_cv_mse_lasso,
   r2_in_sample = r2_in_sample_lasso
 )
@@ -765,3 +771,43 @@ compar_tab_filtered |>
   ) |>
   kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
 ```
+
+```{r}
+# Tableau récapitulatif de toutes les méthodes
+resultats_tous <- rbind(
+  
+  resultats_ridge,
+  resultats_lasso,
+  resultats_en_fixed,
+  resultats_en_gird,
+  resultats_scad,
+  resultats_alasso_ridge,
+  resultats_alasso_lasso
+)
+
+resultats_tous |>
+  select(methode, lambda, nb_variables, cv_mse, r2_in_sample) |>
+  mutate(
+    lambda = round(lambda, 5),
+    cv_mse = round(cv_mse, 5),
+    r2_in_sample = round(r2_in_sample, 4)
+  ) |>
+  kable(
+    caption = "Comparaison des performances des méthodes de régression pénalisée",
+    col.names = c(
+      "Méthode",
+      "Lambda",
+      "Nb. variables",
+      "MSE CV",
+      "R² in-sample"
+    )
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    position = "center",
+    bootstrap_options = c("striped", "hover")
+  )
+```
+
+
+

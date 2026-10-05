@@ -3,9 +3,7 @@ title: "Untitled"
 format: html
 editor: visual
 ---
-```{r}
 
-```
 
 ```{r}
 library(dplyr)
@@ -22,6 +20,7 @@ library(lgarch)
 library(gets)
 library(glmnet)
 library(ncvreg)
+library(tseries)
 ```
 
 # Pré-traitement 
@@ -83,6 +82,12 @@ moyenne <- mean(yy, na.rm = TRUE)
 abline(h = moyenne, col = "red", lwd = 2, lty = 2)
 ```
 On observe visuellement que la série oscille autour d'une moyenne proche de zéro, avec une variance qui semble globalement stable (caractéristique d'une série stationnarisée par transformation), tout en affichant quelques pics de volatilité plus marqués, notamment autour de certaines périodes économiques ou récentes (comme en 2020-2023).
+
+### Stationarité de la variable à expliquer 
+```{r}
+adf.test(yy)
+kpss.test(yy)
+```
 
 ## Statistique descriptives 
 

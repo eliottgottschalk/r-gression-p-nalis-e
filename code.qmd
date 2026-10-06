@@ -21,6 +21,7 @@ library(gets)
 library(glmnet)
 library(ncvreg)
 library(tseries)
+library(moments)
 ```
 
 # Pré-traitement 
@@ -90,9 +91,75 @@ kpss.test(yy)
 ```
 
 ## Statistique descriptives 
-
 ```{r}
 summary(base$hstart_CAN_new)
+```
+
+```{r}
+stats_desc <- data.frame(
+  Statistique = c(
+    "Minimum",
+    "1er quartile",
+    "Médiane",
+    "Moyenne",
+    "3e quartile",
+    "Maximum",
+    "Écart-type",
+    "Variance",
+    "Asymétrie (Skewness)",
+    "Aplatissement (Kurtosis)"
+  ),
+  Valeur = c(
+    min(base$hstart_CAN_new, na.rm = TRUE),
+    quantile(base$hstart_CAN_new, 0.25, na.rm = TRUE),
+    median(base$hstart_CAN_new, na.rm = TRUE),
+    mean(base$hstart_CAN_new, na.rm = TRUE),
+    quantile(base$hstart_CAN_new, 0.75, na.rm = TRUE),
+    max(base$hstart_CAN_new, na.rm = TRUE),
+    sd(base$hstart_CAN_new, na.rm = TRUE),
+    var(base$hstart_CAN_new, na.rm = TRUE),
+    skewness(base$hstart_CAN_new, na.rm = TRUE),
+    kurtosis(base$hstart_CAN_new, na.rm = TRUE)
+  )
+)
+
+stats_desc
+
+library(knitr)
+
+kable(
+  stats_desc,
+  digits = 3,
+  col.names = c("Statistique", "Valeur"),
+  caption = "Statistiques descriptives de hstart_CAN_new"
+)
+
+# ou 
+
+stats_desc <- data.frame(
+  Statistique = c(
+    "Moyenne",
+    "Écart-type",
+    "Minimum",
+    "Maximum",
+    "Asymétrie",
+    "Kurtosis"
+  ),
+  Valeur = c(
+    mean(base$hstart_CAN_new, na.rm = TRUE),
+    sd(base$hstart_CAN_new, na.rm = TRUE),
+    min(base$hstart_CAN_new, na.rm = TRUE),
+    max(base$hstart_CAN_new, na.rm = TRUE),
+    skewness(base$hstart_CAN_new, na.rm = TRUE),
+    kurtosis(base$hstart_CAN_new, na.rm = TRUE)
+  )
+)
+
+knitr::kable(
+  stats_desc,
+  digits = 3,
+  caption = "Statistiques descriptives de Housing starts"
+)
 ```
 Le taux de croissance des nouvelles constructions est centré autour de zéro de par la moyenne. 50% des observations correspondent à des variations relatives comprises entre - 5.62% et 6.92% tandis que les valeurs extrêmes sont respectivement une baisse ou hausse d'environ -25.3% et 46% du nombre de maison construites. Il semblerait donc y avoir une période de l'année plus propice à la construction de maison.
 
@@ -221,8 +288,8 @@ ridge_cv_mse
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
 y_hat <- predict(model_cv_ridge, newx = x)
-r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
-r2_in_sample
+r2_in_sample_ridge <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample_ridge
 
 #---------------------------------------------------------------------
 # Tableau recapitulatif pour le ridge 
@@ -231,7 +298,7 @@ resultats_ridge <- data.frame(
   lambda       = lambda_cv_ridge,
   nb_variables = sum(model_cv_ridge$beta != 0),
   cv_mse       = ridge_cv_mse,
-  r2_in_sample = r2_in_sample
+  r2_in_sample = r2_in_sample_ridge
 )
 resultats_ridge
 
@@ -263,7 +330,7 @@ which(! coef(model_cv_lasso) == 0, arr.ind = TRUE)
 
 # Alternative : affiche directement les noms de variables
 # avec leur coefficient, au lieu de simples indices de ligne/colonne
-coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
+coef(model_cv_lasso)[coef(model_cv_lasso)[, 1] != 0, , drop = FALSE]
 
 #---------------------------------------------------------------------
 # Erreur de validation croisee (out-of-sample) au lambda optimal
@@ -275,8 +342,8 @@ lasso_cv_mse
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
 y_hat <- predict(model_cv_lasso, newx = x)
-r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
-r2_in_sample
+r2_in_sample_lasso <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample_lasso
 
 #---------------------------------------------------------------------
 # Tableau recapitulatif pour lasso 
@@ -285,7 +352,7 @@ resultats_lasso <- data.frame(
   lambda       = lambda_cv_lasso,
   nb_variables = sum(model_cv_lasso$beta != 0),
   cv_mse       = lasso_cv_mse,
-  r2_in_sample = r2_in_sample
+  r2_in_sample = r2_in_sample_lasso
 )
 resultats_lasso
 
@@ -306,21 +373,21 @@ en_cv <- cv.glmnet(x, y, alpha = 0.5, lambda = lambdas_to_try, standardize = T, 
 plot(en_cv)
 
 # Best lambda obtained from CV (lambda.min) - other possibility: lambda.1se
-lambda_cv <- en_cv$lambda.min
-lambda_cv
+lambda_cv_en <- en_cv$lambda.min
+lambda_cv_en
 
 # Evaluation of the final model with the selected lambda
-model_cv <- glmnet(x, y, alpha = 0.5, lambda = lambda_cv, standardize = T)
+model_cv_en <- glmnet(x, y, alpha = 0.5, lambda = lambda_cv_en, standardize = T)
 
 # EN betas
-model_cv$beta
+model_cv_en$beta
 
 # Get the name of relevant variables
-which(! coef(model_cv) == 0, arr.ind = TRUE)
+which(! coef(model_cv_en) == 0, arr.ind = TRUE)
 
 # Alternative : affiche directement les noms de variables
 # avec leur coefficient, au lieu de simples indices de ligne/colonne
-coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
+coef(model_cv_en)[coef(model_cv_en)[, 1] != 0, , drop = FALSE]
 
 #---------------------------------------------------------------------
 # Erreur de validation croisee (out-of-sample) au lambda optimal
@@ -331,20 +398,20 @@ en_cv_mse
 # R2 in-sample du modele final
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
-y_hat <- predict(model_cv, newx = x)
-r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
-r2_in_sample
+y_hat <- predict(model_cv_en, newx = x)
+r2_in_sample_en <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample_en
 
 #---------------------------------------------------------------------
 # Tableau recapitulatif pour EN
 resultats_en_fixed <- data.frame(
   methode      = "EN, fixed",
-  lambda       = lambda_cv,
-  nb_variables = sum(model_cv$beta != 0),
+  lambda       = lambda_cv_en,
+  nb_variables = sum(model_cv_en$beta != 0),
   cv_mse       = en_cv_mse,
-  r2_in_sample = r2_in_sample
+  r2_in_sample = r2_in_sample_en
 )
-resultats_en
+resultats_en_fixed
 
 ```
 
@@ -408,7 +475,7 @@ resultats_en_gird <- data.frame(
   cv_mse       = en_cv_mse,
   r2_in_sample = r2_in_sample
 )
-resultats_en
+resultats_en_gird
 
 
 ```
@@ -496,7 +563,7 @@ fit_cv_adalasso_r <- cv.glmnet(x, y,penalty.factor=poids.ridge)
 plot(fit_cv_adalasso_r)
 
 # Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
-lambda_cv_adalasso_r <- fit_cv_adalasso_r$lambda.1se
+lambda_cv_adalasso_r <- fit_cv_adalasso_r$lambda.min
 lambda_cv_adalasso_r
 
 # Evaluation of the final model with the selected lambda
@@ -510,7 +577,7 @@ which(! coef(model_cv_adalasso_r) == 0, arr.ind = TRUE)
 
 # Alternative : affiche directement les noms de variables
 # avec leur coefficient, au lieu de simples indices de ligne/colonne
-coef(model_cv)[coef(model_cv)[, 1] != 0, , drop = FALSE]
+coef(model_cv_adalasso_r)[coef(model_cv_adalasso_r)[, 1] != 0, , drop = FALSE]
 
 # Erreur de validation croisee (out-of-sample) au lambda optimal
 alasso_cv_mse <- min(fit_cv_adalasso_r$cvm)   # equivalent a fit_cv_adalasso$cvm[fit_cv_adalasso$lambda == lambda_cv]
@@ -520,18 +587,18 @@ alasso_cv_mse
 # ATTENTION : ne sert qu'a decrire l'ajustement de CE modele, pas a le
 # comparer a un autre modele retenant plus/moins de variables
 y_hat <- predict(model_cv_adalasso_r, newx = x)
-r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
-r2_in_sample
+r2_in_sample_lr <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
+r2_in_sample_lr
 
 # Tableau recapitulatif pour alasso 
 resultats_alasso_ridge <- data.frame(
   methode      = "aLasso-Ridge",
-  lambda       = lambda_cv,
+  lambda       = lambda_cv_adalasso_r,
   nb_variables = sum(model_cv_adalasso_r$beta != 0),
   cv_mse       = alasso_cv_mse,
-  r2_in_sample = r2_in_sample
+  r2_in_sample = r2_in_sample_lr
 )
-resultats_alasso
+resultats_alasso_ridge
 
 ```
 
@@ -554,13 +621,13 @@ fit_adalasso <- glmnet(x, y, penalty.factor =poids.lasso)
 fit_cv_adalasso_lasso<-cv.glmnet(x, y,penalty.factor=poids.lasso)
 
 # Figure of lambdas 
-plot(fit_cv_adalasso)
+plot(fit_cv_adalasso_lasso)
 
 # Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
 lambda_cv_adalasso_lasso <- fit_cv_adalasso_lasso$lambda.min
-lambda_cv_adalasso
+lambda_cv_adalasso_lasso
 # Evaluation of the final model with the selected lambda
-model_cv_adalasso_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_adalasso, standardize = T, penalty.factor = poids.lasso)
+model_cv_adalasso_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_adalasso_lasso, standardize = T, penalty.factor = poids.lasso)
 
 # Lasso betas
 model_cv_adalasso_lasso$beta
@@ -585,12 +652,12 @@ r2_in_sample_lasso
 # Tableau recapitulatif pour alasso 
 resultats_alasso_lasso <- data.frame(
   methode      = "aLasso-Lasso",
-  lambda       = lambda_cv_lasso,
+  lambda       = lambda_cv_adalasso_lasso,
   nb_variables = sum(model_cv_adalasso_lasso$beta != 0),
   cv_mse       = alasso_lasso_cv_mse_lasso,
   r2_in_sample = r2_in_sample_lasso
 )
-resultats_alasso
+resultats_alasso_lasso
 
 ```
 
@@ -606,7 +673,7 @@ hyperparam_wide <- data.frame(
   Lasso = c(round(lambda_cv_lasso, 5), 1),
   `Elastic-Net` = c(round(lambda_cv_en, 5), 0.5),
   SCAD = c(round(lambda_SCAD, 5), 1),
-  `Adaptive Lasso Lasso` = c(round(lambda_cv_adalasso, 5), 1),
+  `Adaptive Lasso Lasso` = c(round(lambda_cv_adalasso_lasso, 5), 1),
   `Adaptive Lasso Ridge` = c(round(lambda_cv_adalasso_r, 5), 1)
 )
 
@@ -660,10 +727,14 @@ get_beta_glmnet <- function(model, var_names, lambda){
 }
 
 beta_ridge <- get_beta_glmnet(model_cv_ridge, var_names, lambda = ridge_cv$lambda.min)
+
 beta_lasso <- get_beta_glmnet(model_cv_lasso, var_names, lambda = lasso_cv$lambda.min)
+
 beta_en    <- get_beta_glmnet(model_cv_en, var_names, lambda = en_cv$lambda.min)
-beta_adalasso <- get_beta_glmnet(model_cv_adalasso, var_names, lambda = fit_cv_adalasso$lambda.1se)
-beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.1se)
+
+beta_adalasso <- get_beta_glmnet(model_cv_adalasso_lasso, var_names, lambda = fit_cv_adalasso_lasso$lambda.min)
+
+beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.min)
 
 beta_scad <- as.vector(SCAD_Final$beta[-1])
 names(beta_scad) <- var_names
@@ -733,10 +804,14 @@ get_beta_glmnet <- function(model, var_names, lambda){
 }
 
 beta_ridge <- get_beta_glmnet(model_cv_ridge, var_names, lambda = ridge_cv$lambda.min)
+
 beta_lasso <- get_beta_glmnet(model_cv_lasso, var_names, lambda = lasso_cv$lambda.min)
+
 beta_en    <- get_beta_glmnet(model_cv_en, var_names, lambda = en_cv$lambda.min)
-beta_adalasso <- get_beta_glmnet(model_cv_adalasso, var_names, lambda = fit_cv_adalasso$lambda.1se)
-beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.1se)
+
+beta_adalasso <- get_beta_glmnet(model_cv_adalasso_lasso, var_names, lambda = fit_cv_adalasso_lasso$lambda.min)
+
+beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.min)
 
 beta_scad <- as.vector(SCAD_Final$beta[-1])
 names(beta_scad) <- var_names

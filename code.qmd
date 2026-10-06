@@ -686,6 +686,7 @@ hyperparam_wide |>
 ```
 
 ### Tableau des coefficients des Beta + MCO
+Problème ca ne correspond pas !
 
 ```{r}
 # Estimation du modèle MCO
@@ -736,6 +737,7 @@ beta_adalasso <- get_beta_glmnet(model_cv_adalasso_lasso, var_names, lambda = fi
 
 beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.min)
 
+
 beta_scad <- as.vector(SCAD_Final$beta[-1])
 names(beta_scad) <- var_names
 
@@ -762,7 +764,8 @@ compar_tab |>
   kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
 ```
 
-# Tableau oral
+
+# Tableau 
 
 ```{r}
 # Estimation du modèle MCO
@@ -890,4 +893,28 @@ resultats_tous |>
 ```
 
 
+# La remarque du prof d'apres chatou 
+```{r}
+# 1. Filtrer pour ne garder QUE les variables sélectionnées par au moins une méthode de sélection
+compar_tab_filtered <- compar_tab |>
+  filter(
+    (Lasso != 0) |
+    (`Elastic Net` != 0) |
+    (SCAD != 0) |
+    (`Adaptive Lasso (Lasso)` != 0) |
+    (`Adaptive Lasso (Ridge)` != 0)
+  )
+
+# 2. Remplacer les 0 restants par du vide pour que ce soit plus propre à la lecture
+compar_tab_filtered <- compar_tab_filtered |>
+  mutate(across(-c(Variable, MCO), ~ ifelse(. == 0, "", .)))
+
+# 3. Affichage du tableau final épuré
+compar_tab_filtered |>
+  kable(
+    caption = "Comparaison des coefficients pour les variables sélectionnées par les méthodes de régularisation",
+    digits = 4
+  ) |>
+  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
+```
 

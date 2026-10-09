@@ -684,19 +684,19 @@ hyperparam_wide |>
   ) |>
   kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
 ```
-
-### Tableau des coefficients des Beta + MCO
-Problème ca ne correspond pas !
+# Tableau des coefficients des Beta + MCO
 
 ```{r}
 # Estimation du modèle MCO
 lm <- lm(y ~ x)
 summary_mco <- summary(lm)
 
+
 # Extraction des coefficients et p-values avec retrait de l'intercept
 coefs_mco <- summary_mco$coefficients[-1, , drop = FALSE]
 var_names <- colnames(x)
 rownames(coefs_mco) <- var_names
+
 
 # Préparation du tableau MCO uniquement pour les coefficients significatifs
 mco_df <- data.frame(
@@ -714,54 +714,162 @@ mco_df <- data.frame(
     `Coeff. (MCO)` = ifelse(
       p_value < 0.10,
       paste0(round(Coefficient, 4), Significance),
-      "" 
+      ""
     )
   ) |>
   select(Variable, `Coeff. (MCO)`)
 
-# Extraction des coefficients des méthodes pénalisées
+
+# ---------------------------------------------------------
+# Fonction pour extraire les coefficients des modèles glmnet
+# ---------------------------------------------------------
+
 get_beta_glmnet <- function(model, var_names, lambda){
+  
   beta <- as.vector(coef(model, s = lambda))
+  
+  # Retrait de l'intercept
   beta <- beta[-1]
+  
   names(beta) <- var_names
+  
   return(beta)
 }
 
-beta_ridge <- get_beta_glmnet(model_cv_ridge, var_names, lambda = ridge_cv$lambda.min)
 
-beta_lasso <- get_beta_glmnet(model_cv_lasso, var_names, lambda = lasso_cv$lambda.min)
+# ---------------------------------------------------------
+# Extraction des coefficients des différentes méthodes
+# ---------------------------------------------------------
 
-beta_en    <- get_beta_glmnet(model_cv_en, var_names, lambda = en_cv$lambda.min)
+# Ridge
+beta_ridge <- as.vector(
+  coef(ridge_cv, s = "lambda.min")
+)[-1]
 
-beta_adalasso <- get_beta_glmnet(model_cv_adalasso_lasso, var_names, lambda = fit_cv_adalasso_lasso$lambda.min)
-
-beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.min)
+names(beta_ridge) <- var_names
 
 
-beta_scad <- as.vector(SCAD_Final$beta[-1])
+# Lasso
+beta_lasso <- as.vector(
+  coef(lasso_cv, s = "lambda.min")
+)[-1]
+
+names(beta_lasso) <- var_names
+
+
+beta_en_fixed <- as.vector(model_cv_en$beta)
+names(beta_en_fixed) <- var_names
+
+
+beta_en_grid <- as.vector(model_cv$beta)
+names(beta_en_grid) <- var_names
+
+
+# Adaptive Lasso - Lasso
+beta_adalasso <- get_beta_glmnet(
+  model_cv_adalasso_lasso,
+  var_names,
+  lambda = fit_cv_adalasso_lasso$lambda.min
+)
+
+
+# Adaptive Lasso - Ridge
+beta_adalasso_r <- get_beta_glmnet(
+  model_cv_adalasso_r,
+  var_names,
+  lambda = fit_cv_adalasso_r$lambda.min
+)
+
+
+# SCAD
+beta_scad <- as.vector(
+  SCAD_Final$beta[-1]
+)
+
 names(beta_scad) <- var_names
 
-# Tableau complet
+
+# ---------------------------------------------------------
+# Création du tableau complet
+# ---------------------------------------------------------
+
 compar_tab <- data.frame(
-  `MCO` = mco_df$`Coeff. (MCO)`[match(var_names, mco_df$Variable)],
-  Ridge = round(beta_ridge, 4),
-  Lasso = round(beta_lasso, 4),
-  `Elastic Net` = round(beta_en, 4),
-  SCAD = round(beta_scad, 4),
-  `Adaptive Lasso (Lasso)` = round(beta_adalasso, 4),
-  `Adaptive Lasso (Ridge)` = round(beta_adalasso_r, 4),
+  
+  Variable = var_names,
+  
+  `MCO` = mco_df$`Coeff. (MCO)`[
+    match(var_names, mco_df$Variable)
+  ],
+  
+  Ridge = beta_ridge,
+  
+  Lasso = beta_lasso,
+  
+  `EN, fixed` = beta_en_fixed,
+  
+  `EN, Grid` = beta_en_grid,
+  
+  SCAD = beta_scad,
+  
+  `Adaptive Lasso (Lasso)` = beta_adalasso,
+  
+  `Adaptive Lasso (Ridge)` = beta_adalasso_r,
+  
   check.names = FALSE
 )
 
+
+# ---------------------------------------------------------
+# Mise en forme des coefficients
+# ---------------------------------------------------------
+
 compar_tab <- compar_tab |>
-  mutate(across(everything(), ~ ifelse(. == 0, "", .)))
+  mutate(
+    across(
+      c(
+        Ridge,
+        Lasso,
+        `EN, fixed`,
+        `EN, Grid`,
+        SCAD,
+        `Adaptive Lasso (Lasso)`,
+        `Adaptive Lasso (Ridge)`
+      ),
+      ~ ifelse(
+        . == 0,
+        "",
+        sprintf("%.4f", .)
+      )
+    )
+  )
+
+
+# ---------------------------------------------------------
+# Affichage du tableau
+# ---------------------------------------------------------
 
 compar_tab |>
   kable(
-    caption = "Comparaison des coefficients estimés par différentes méthodes pénalisées (avec significativité MCO au seuil de 10%)",
-    digits = 4
+    caption = "Comparaison des coefficients estimés par les différentes méthodes pénalisées (avec significativité MCO au seuil de 10%)",
+    align = "lcccccccc"
   ) |>
-  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
+  kable_styling(
+    full_width = FALSE,
+    position = "center",
+    bootstrap_options = c("striped", "hover")
+  )
+
+
+# ---------------------------------------------------------
+# Export du tableau vers Excel
+# ---------------------------------------------------------
+
+library(writexl)
+
+write_xlsx(
+  compar_tab,
+  path = "comparaison_coefficients_modeles.xlsx"
+)
 ```
 
 

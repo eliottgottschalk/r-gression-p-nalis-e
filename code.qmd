@@ -21,6 +21,8 @@ library(gets)
 library(glmnet)
 library(ncvreg)
 library(tseries)
+library(lmtest)
+library(car)
 library(moments)
 ```
 
@@ -690,8 +692,20 @@ hyperparam_wide |>
 # Estimation du modèle MCO
 lm <- lm(y ~ x)
 summary_mco <- summary(lm)
+```
 
+## Vérification hyp MCO 
 
+```{r}
+# Homoscédacticité 
+bptest(lm)
+# Autocorrélation des résidus, test de Breusch-Godfrey
+bgtest(lm, order = 12)
+# test RESET de Ramsey
+resettest(lm, power = 2:3, type = "fitted")
+```
+
+```{r}
 # Extraction des coefficients et p-values avec retrait de l'intercept
 coefs_mco <- summary_mco$coefficients[-1, , drop = FALSE]
 var_names <- colnames(x)

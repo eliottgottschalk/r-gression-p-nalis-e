@@ -174,7 +174,7 @@ boxplot(base$hstart_CAN_new)
 Quelques points visible sur le graphique, une verification avec le test de Rosner est donc appliqué.
 
 ```{r}
-rosner <- rosnerTest(yy, k = 16)
+rosner <- rosnerTest(yy, k = 9)
 
 print(rosner)
 ```

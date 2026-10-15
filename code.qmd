@@ -249,13 +249,27 @@ y_hat <- predict(model_cv_ridge, newx = x)
 r2_in_sample_ridge <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample_ridge
 
+# AIC
+# Prédictions au lambda optimal
+y_hat_ridge <- as.vector(
+  predict(model_cv_ridge, newx = x, s = "lambda.min")
+)
+# Somme des carrés des résidus
+RSS_ridge <- sum((y - y_hat_ridge)^2)
+# Nombre d'observations et de variables
+n <- length(y)
+p <- ncol(x)
+# AIC simplifié (approximation utilisant p + 1 paramètres)
+AIC_ridge <- n * log(RSS_ridge / n) + 2 * (p + 1)
+
 # Tableau recapitulatif pour le ridge 
 resultats_ridge <- data.frame(
   methode      = "ridge",
   lambda       = lambda_cv_ridge,
   nb_variables = sum(model_cv_ridge$beta != 0),
   cv_mse       = ridge_cv_mse,
-  r2_in_sample = r2_in_sample_ridge
+  r2_in_sample = r2_in_sample_ridge,
+  AIC          = AIC_ridge
 )
 resultats_ridge
 
@@ -275,7 +289,7 @@ plot(lasso_cv)
 lambda_cv_lasso <- lasso_cv$lambda.min
 lambda_cv_lasso
 
-# modele avec bon lamda
+# modele avec bon lambda
 model_cv_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_lasso, standardize = T)
 
 model_cv_lasso$beta
@@ -296,13 +310,29 @@ y_hat <- predict(model_cv_lasso, newx = x)
 r2_in_sample_lasso <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample_lasso
 
+# AIC
+# Prédictions au lambda optimal
+pred <- as.vector(
+  predict(model_cv_lasso, newx = x, s = "lambda.min")
+)
+# Somme des carrés des résidus
+RSS <- sum((y - pred)^2)
+# Nombre de coefficients non nuls, intercept exclu
+k <- sum(as.vector(
+  coef(model_cv_lasso, s = "lambda.min")[-1]
+) != 0)
+# AIC approximatif
+n <- length(y)
+AIC_lasso <- n * log(RSS / n) + 2 * (k + 1)
+
 # Tableau recapitulatif pour lasso 
 resultats_lasso <- data.frame(
   methode      = "Lasso",
   lambda       = lambda_cv_lasso,
   nb_variables = sum(model_cv_lasso$beta != 0),
   cv_mse       = lasso_cv_mse,
-  r2_in_sample = r2_in_sample_lasso
+  r2_in_sample = r2_in_sample_lasso,
+  AIC    = AIC_lasso
 )
 resultats_lasso
 
@@ -344,20 +374,36 @@ y_hat <- predict(model_cv_en, newx = x)
 r2_in_sample_en <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample_en
 
+# AIC
+# Prédictions au lambda optimal
+pred_en <- as.vector(
+  predict(model_cv_en, newx = x, s = "lambda.min")
+)
+# Somme des carrés des résidus
+RSS_en <- sum((y - pred_en)^2)
+# Nombre de coefficients non nuls, hors intercept
+k_en <- sum(as.vector(
+  coef(model_cv_en, s = "lambda.min")[-1]
+) != 0)
+# Calcul de l'AIC approximatif
+n <- length(y)
+AIC_en <- n * log(RSS_en / n) + 2 * (k_en + 1)
+
 # Tableau recapitulatif pour EN
 resultats_en_fixed <- data.frame(
   methode      = "EN, fixed",
   lambda       = lambda_cv_en,
   nb_variables = sum(model_cv_en$beta != 0),
   cv_mse       = en_cv_mse,
-  r2_in_sample = r2_in_sample_en
+  r2_in_sample = r2_in_sample_en,
+  AIC          = AIC_en
 )
 resultats_en_fixed
 
 ```
 
 
-#### Gird search 
+#### Grid search 
 
 ```{r}
 # Elastic-Net avec recherche d'alpha
@@ -402,17 +448,50 @@ y_hat <- predict(model_cv, newx = x)
 r2_in_sample <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample
 
+# AIC
+# Prédictions au lambda optimal
+pred_eng <- as.vector(
+  predict(model_cv, newx = x, s = "lambda.min")
+)
+# Somme des carrés des résidus
+RSS_eng <- sum((y - pred_eng)^2)
+# Nombre de coefficients non nuls, hors intercept
+k_eng <- sum(as.vector(
+  coef(model_cv, s = "lambda.min")[-1]
+) != 0)
+# Calcul de l'AIC approximatif
+n <- length(y)
+AIC_eng <- n * log(RSS_eng / n) + 2 * (k_eng + 1)
+
 # Tableau recapitulatif pour EN
 resultats_en_gird <- data.frame(
   methode      = "EN Grid",
   lambda       = lambda_cv,
   nb_variables = sum(model_cv$beta != 0),
   cv_mse       = en_cv_mse,
-  r2_in_sample = r2_in_sample
+  r2_in_sample = r2_in_sample,
+  AIC          = AIC_eng
 )
 resultats_en_gird
 
 
+```
+
+décomposition du lambda
+```{r}
+# Paramètres retenus par le modèle Elastic Net
+alpha_f <- 0.5
+lambda_f <- lambda_cv_en
+
+alpha_g <- elasticnet_cvm
+lambda_g <- lambda_cv
+
+# Décomposition de la pénalisation
+lambda_L1_f <- lambda_f * alpha_f
+lambda_L1_g <- lambda_g * alpha_g
+
+lambda_L1_f
+lambda_L1_g
 ```
 
 
@@ -454,13 +533,28 @@ y_hat_scad <- predict(SCAD_Final, X = x)
 r2_in_sample_scad <- 1 - sum((y - y_hat_scad)^2) / sum((y - mean(y))^2)
 r2_in_sample_scad
 
+# AIC
+# Prédictions du modèle SCAD final
+y_hat_scad <- as.vector(
+  predict(SCAD_Final, X = x)
+)
+# Somme des carrés des résidus
+RSS_scad <- sum((y - y_hat_scad)^2)
+# Nombre de coefficients non nuls, hors intercept
+beta_scad <- coef(SCAD_Final)
+k_scad <- sum(beta_scad[-1] != 0)
+# Calcul de l'AIC approximatif
+n <- length(y)
+AIC_scad <- n * log(RSS_scad / n) + 2 * (k_scad + 1)
+
 # Tableau recapitulatif pour SCAD
 resultats_scad <- data.frame(
   methode      = "SCAD",
   lambda       = lambda_SCAD,
   nb_variables = sum(SCAD_Final$beta != 0) - 1,   # -1 pour exclure l'intercept
   cv_mse       = scad_cv_mse,
-  r2_in_sample = r2_in_sample_scad
+  r2_in_sample = r2_in_sample_scad,
+  AIC          = AIC_scad
 )
 resultats_scad
 
@@ -518,13 +612,29 @@ y_hat <- predict(model_cv_adalasso_r, newx = x)
 r2_in_sample_lr <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample_lr
 
+# AIC
+# Prédictions du modèle Adaptive Lasso
+y_hat_alasso <- as.vector(
+  predict(model_cv_adalasso_r, newx = x)
+)
+# Somme des carrés des résidus
+RSS_alasso <- sum((y - y_hat_alasso)^2)
+# Coefficients du modèle
+beta_alasso <- coef(model_cv_adalasso_r)
+# Nombre de coefficients non nuls, hors intercept
+k_alasso <- sum(as.vector(beta_alasso)[-1] != 0)
+# AIC approximatif
+n <- length(y)
+AIC_alasso_r <- n * log(RSS_alasso / n) + 2 * (k_alasso + 1)
+
 # Tableau recapitulatif pour alasso 
 resultats_alasso_ridge <- data.frame(
   methode      = "aLasso-Ridge",
   lambda       = lambda_cv_adalasso_r,
   nb_variables = sum(model_cv_adalasso_r$beta != 0),
   cv_mse       = alasso_cv_mse,
-  r2_in_sample = r2_in_sample_lr
+  r2_in_sample = r2_in_sample_lr,
+  AIC          = AIC_alasso_r
 )
 resultats_alasso_ridge
 
@@ -571,13 +681,29 @@ y_hat <- predict(model_cv_adalasso_lasso, newx = x)
 r2_in_sample_lasso <- 1 - sum((y - y_hat)^2) / sum((y - mean(y))^2)
 r2_in_sample_lasso
 
+# AIC
+# Prédictions du modèle Adaptive Lasso
+y_hat_alasso <- as.vector(
+  predict(model_cv_adalasso_lasso, newx = x)
+)
+# Somme des carrés des résidus
+RSS_alasso <- sum((y - y_hat_alasso)^2)
+# Coefficients du modèle
+beta_alasso <- coef(model_cv_adalasso_lasso)
+# Nombre de coefficients non nuls, hors intercept
+k_alasso <- sum(as.vector(beta_alasso)[-1] != 0)
+# AIC approximatif
+n <- length(y)
+AIC_alasso <- n * log(RSS_alasso / n) + 2 * (k_alasso + 1)
+
 # Tableau recapitulatif pour alasso 
 resultats_alasso_lasso <- data.frame(
   methode      = "aLasso-Lasso",
   lambda       = lambda_cv_adalasso_lasso,
   nb_variables = sum(model_cv_adalasso_lasso$beta != 0),
   cv_mse       = alasso_lasso_cv_mse_lasso,
-  r2_in_sample = r2_in_sample_lasso
+  r2_in_sample = r2_in_sample_lasso,
+  AIC          = AIC_alasso
 )
 resultats_alasso_lasso
 
@@ -612,6 +738,16 @@ hyperparam_wide |>
 # Estimation du modèle MCO
 lm <- lm(y ~ x)
 summary_mco <- summary(lm)
+
+# AIC
+y_hat_MCO <- as.vector(predict(lm))
+# Somme des carrés des résidus
+RSS_MCO <- sum((y - y_hat_MCO)^2)
+# Calcul de l'AIC
+n <- length(y)
+k <- length(coef(lm))
+AIC_MCO <- n * log(RSS_MCO / n) + 2 * k
+AIC_MCO
 ```
 
 ## Vérification hyp MCO 
@@ -872,7 +1008,7 @@ compar_tab <- data.frame(
   check.names = FALSE
 )
 
-# ---- 🔍 Filtrage : ne garder que les variables sélectionnées par AU MOINS UNE méthode autre que Ridge ----
+# Filtrage : ne garder que les variables sélectionnées par AU MOINS UNE méthode autre que Ridge
 compar_tab_filtered <- compar_tab |>
   filter(
     (`Lasso` != 0) |
@@ -909,11 +1045,12 @@ resultats_tous <- rbind(
 )
 
 resultats_tous |>
-  select(methode, lambda, nb_variables, cv_mse, r2_in_sample) |>
+  select(methode, lambda, nb_variables, cv_mse, r2_in_sample, AIC) |>
   mutate(
-    lambda = round(lambda, 5),
-    cv_mse = round(cv_mse, 5),
-    r2_in_sample = round(r2_in_sample, 4)
+    lambda = round(lambda, 3),
+    cv_mse = round(cv_mse, 3),
+    r2_in_sample = round(r2_in_sample, 3),
+    AIC = round(AIC, 3)
   ) |>
   kable(
     caption = "Comparaison des performances des méthodes de régression pénalisée",
@@ -922,7 +1059,8 @@ resultats_tous |>
       "Lambda",
       "Nb. variables",
       "MSE CV",
-      "R² in-sample"
+      "R² in-sample",
+      "AIC"
     )
   ) |>
   kable_styling(

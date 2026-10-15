@@ -516,7 +516,7 @@ lambda_SCAD <- cvfit_SCAD$lambda.min
 lambda_SCAD
 
 #Modele finale 
-SCAD_Final=ncvreg(x, y, lambda=lambda_SCAD, alpha = 1)
+SCAD_Final=ncvreg(x, y, lambda=lambda_SCAD, penalty = "SCAD")
 SCAD_Final$beta
 
 which(! coef(SCAD_Final) == 0, arr.ind = TRUE)

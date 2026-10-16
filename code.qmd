@@ -720,10 +720,9 @@ hyperparam_wide <- data.frame(
   Ridge = c(round(lambda_cv_ridge, 5), 0),
   Lasso = c(round(lambda_cv_lasso, 5), 1),
   `Elastic-Net` = c(round(lambda_cv_en, 5), 0.5),
-  SCAD = c(round(lambda_SCAD, 5), 1),
+  SCAD = c(round(lambda_SCAD, 5), NA),
   `Adaptive Lasso Lasso` = c(round(lambda_cv_adalasso_lasso, 5), 1),
-  `Adaptive Lasso Ridge` = c(round(lambda_cv_adalasso_r, 5), 1)
-)
+  `Adaptive Lasso Ridge` = c(round(lambda_cv_adalasso_r, 5), 1))
 
 hyperparam_wide |>
   kable(
@@ -732,22 +731,58 @@ hyperparam_wide |>
   ) |>
   kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
 ```
+
 # Tableau des coefficients des Beta + MCO
 
 ```{r}
-# Estimation du modèle MCO
+# Estimation du modèle MCO sur toutes les données
 lm <- lm(y ~ x)
 summary_mco <- summary(lm)
 
-# AIC
+# Prédictions sur l'échantillon complet
 y_hat_MCO <- as.vector(predict(lm))
+
 # Somme des carrés des résidus
 RSS_MCO <- sum((y - y_hat_MCO)^2)
-# Calcul de l'AIC
+
+# AIC
 n <- length(y)
 k <- length(coef(lm))
 AIC_MCO <- n * log(RSS_MCO / n) + 2 * k
+
+# MSE in-sample
+MSE_MCO <- mean((y - y_hat_MCO)^2)
+
+# Validation croisée à 10 plis pour le MCO
+set.seed(1)
+
+folds <- sample(rep(1:10, length.out = n))
+mse_cv_mco <- numeric(10)
+
+for (i in 1:10) {
+  train <- which(folds != i)
+  test  <- which(folds == i)
+
+  train_data <- data.frame(
+    y = as.vector(y[train]),
+    as.data.frame(x[train, , drop = FALSE])
+  )
+
+  test_data <- as.data.frame(
+    x[test, , drop = FALSE]
+  )
+
+  model_mco_cv <- lm(y ~ ., data = train_data)
+  y_pred <- predict(model_mco_cv, newdata = test_data)
+
+  mse_cv_mco[i] <- mean((y[test] - y_pred)^2)
+}
+
+MSE_CV_MCO <- mean(mse_cv_mco)
+
+# Affichage des résultats
 AIC_MCO
+MSE_CV_MCO
 ```
 
 ## Vérification hyp MCO 
@@ -1068,31 +1103,5 @@ resultats_tous |>
     position = "center",
     bootstrap_options = c("striped", "hover")
   )
-```
-
-
-# La remarque du prof d'apres chatou 
-```{r}
-# 1. Filtrer pour ne garder QUE les variables sélectionnées par au moins une méthode de sélection
-compar_tab_filtered <- compar_tab |>
-  filter(
-    (Lasso != 0) |
-    (`Elastic Net` != 0) |
-    (SCAD != 0) |
-    (`Adaptive Lasso (Lasso)` != 0) |
-    (`Adaptive Lasso (Ridge)` != 0)
-  )
-
-# 2. Remplacer les 0 restants par du vide pour que ce soit plus propre à la lecture
-compar_tab_filtered <- compar_tab_filtered |>
-  mutate(across(-c(Variable, MCO), ~ ifelse(. == 0, "", .)))
-
-# 3. Affichage du tableau final épuré
-compar_tab_filtered |>
-  kable(
-    caption = "Comparaison des coefficients pour les variables sélectionnées par les méthodes de régularisation",
-    digits = 4
-  ) |>
-  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
 ```
 

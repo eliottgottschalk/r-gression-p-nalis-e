@@ -148,7 +148,7 @@ Pas de valeurs abberrante ou atypique selon le test de rosner
 
 ## Corrélation entre les variables à explicatives et la variable à expliquer, et entre les variables explicatives
 
-Spearman  car relation potentiellement non linéaire c'est mieux 
+Spearman car relation potentiellement non linéaire c'est mieux 
 
 ### Corrélation entre les variables explicatives et la variable à expliquer
 
@@ -646,7 +646,7 @@ resultats_alasso_ridge
 # Adaptive Lasso avec lasso en première étape
 set.seed(1)
 model_cv_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
-coef_lasso<-predict(model_cv,type="coef",s=lambda_cv)
+coef_lasso<-predict(model_cv_lasso,type="coef",s=lambda_cv)
 # poids avec gamma = 0.5
 gamma=0.5
 w0<-1/(abs(coef_lasso) + (1/length(y)))

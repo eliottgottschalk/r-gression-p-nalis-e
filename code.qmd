@@ -479,21 +479,25 @@ resultats_en_gird
 
 ```
 
-décomposition du lambda
+### 5.3.3 Décomposition du lambda
 ```{r}
-# Paramètres retenus par le modèle Elastic Net
+# Elastic Net Fixed
 alpha_f <- 0.5
 lambda_f <- lambda_cv_en
 
-alpha_g <- elasticnet_cvm
+# Elastic Net Grid
+alpha_g <- elasticnet_cvm  # alpha optimal sélectionné par la grille
 lambda_g <- lambda_cv_grid
 
-# Décomposition de la pénalisation
-lambda_L1_f <- lambda_f * alpha_f
-lambda_L1_g <- lambda_g * alpha_g
+# Tableau récapitulatif
+decomposition_lambda <- data.frame(
+  Methode = c("Elastic Net Fixed", "Elastic Net Grid"),
+  Alpha = c(alpha_f, alpha_g),
+  Lambda_brut = c(lambda_f, lambda_g),
+  Part_L1 = c(lambda_f * alpha_f, lambda_g * alpha_g)
+)
 
-lambda_L1_f
-lambda_L1_g
+decomposition_lambda
 ```
 
 

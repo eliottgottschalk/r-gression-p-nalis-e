@@ -4,6 +4,7 @@ format: html
 editor: visual
 ---
 
+# 1) Packages 
 
 ```{r}
 library(dplyr)
@@ -27,7 +28,7 @@ library(moments)
 library(writexl)
 ```
 
-# Pré-traitement 
+# 2) Import des données, nettoyage 
 ```{r}
 base <- read.csv("balanced_can_md.csv")
 table <- read_xlsx("Table_can_md.xlsx")
@@ -51,16 +52,17 @@ str(base)
 
 ```
 
-# I. Analyses exploratoire et descriptive
-## Analyse des valeurs manquante 
+# 3) Analyses exploratoire et descriptive
+## 3.1 Analyse des valeurs manquante 
 
 ```{r, warning=FALSE}
 gg_miss_upset(base)
 ```
-5 variables avec des valeurs manquantes, soit 69 valeurs manquantes présentent au même endroit pour chacunes d'entre elles. 
+5 variables avec des valeurs manquantes, soit 69 valeurs manquantes présentent au même endroit pour chacune d'entre elles. 
 
-on supprime les 5 variables car il y a un risque de multicolinéaroté avec les nouvelles variables active.
+On supprime les 5 variables car il y a un risque de multicolinéaroté avec les nouvelles variables active.
 
+### 3.1.1 Suppression des  variables 
 ```{r}
 base <- base |>
   dplyr::select(
@@ -72,7 +74,7 @@ base <- base |>
   )
 ```
 
-## Graphique de la variable à expliquer 
+## 3.2 Graphique de la variable à expliquer 
 
 ```{r}
 # Création de la ts
@@ -86,13 +88,13 @@ abline(h = moyenne, col = "red", lwd = 2, lty = 2)
 ```
 On observe visuellement que la série oscille autour d'une moyenne proche de zéro, avec une variance qui semble globalement stable (caractéristique d'une série stationnarisée par transformation), tout en affichant quelques pics de volatilité plus marqués, notamment autour de certaines périodes économiques ou récentes (comme en 2020-2023).
 
-### Stationarité de la variable à expliquer 
+### 3.3 Stationarité de la variable à expliquer 
 ```{r}
 adf.test(yy)
 kpss.test(yy)
 ```
 
-## Statistique descriptives 
+## 3.4 Statistique descriptives 
 ```{r}
 summary(base$hstart_CAN_new)
 ```
@@ -128,16 +130,18 @@ stats_desc <- data.frame(
 stats_desc
 ```
 
+## 3.5 Histogramme de la variable à expliquer
 ```{r}
 hist(base$hstart_CAN_new)
 ```
 
-
+## 3.6 Boxplot 
 ```{r}
 boxplot(base$hstart_CAN_new)
 ```
 Quelques points visible sur le graphique, une verification avec le test de Rosner est donc appliqué.
 
+### 3.6.1 Verification outliers 
 ```{r}
 rosner <- rosnerTest(yy, k = 9)
 
@@ -146,11 +150,11 @@ print(rosner)
 
 Pas de valeurs abberrante ou atypique selon le test de rosner 
 
-## Corrélation entre les variables à explicatives et la variable à expliquer, et entre les variables explicatives
+## 3.7 Corrélation
 
 Spearman car relation potentiellement non linéaire c'est mieux 
 
-### Corrélation entre les variables explicatives et la variable à expliquer
+### 3.7.1 Corrélation entre les variables explicatives et la variable à expliquer
 
 
 ```{r}
@@ -180,7 +184,7 @@ Spearman car relation potentiellement non linéaire c'est mieux
   abline(v = 0, col = "grey40", lty = 2)
 ```
 
-### Corrélation entre les variables explicatives
+### 3.7.2 Corrélation entre les variables explicatives
 
 
 ```{r}
@@ -198,9 +202,7 @@ corrplot(matrice_filtre, method = "circle", type = "upper", diag = FALSE, tl.cex
 ```
 
 
-# II. Sélection des variables
-
-## 5) Régressions pénalisées : Ridge, Lasso, Elastic-Net, SCAD et Adaptive Lasso
+# 5) Régressions pénalisées : Ridge, Lasso, Elastic-Net, SCAD et Adaptive Lasso
 
 ```{r}
 registerDoParallel(cores = 4)
@@ -219,7 +221,7 @@ x <- data.frame(training_dlbase) |>
   as.matrix()
 ```
 
-### Ridge
+### 5.1 Ridge
 
 ```{r}
 # Ridge regression
@@ -275,7 +277,7 @@ resultats_ridge
 
 ```
 
-### Lasso
+## 5.2 Lasso
 
 ```{r}
 # LASSO regression
@@ -339,8 +341,8 @@ resultats_lasso
 ```
 
 
-### Elastic-Net, 
-#### Fixed 
+## 5.3 Elastic-Net, 
+### 5.3.1  Fixed 
 
 ```{r}
 # Elastic-Net regression with alpha = 0.5
@@ -403,7 +405,7 @@ resultats_en_fixed
 ```
 
 
-#### Grid search 
+### 5.3.2 Grid search 
 
 ```{r}
 # Elastic-Net avec recherche d'alpha
@@ -497,7 +499,7 @@ lambda_L1_g
 
 
 
-### SCAD
+## 5.4 SCAD
 
 ```{r}
 # SCAD
@@ -561,9 +563,9 @@ resultats_scad
 
 ```
 
-### Adaptive Lasso
+## 5.5 Adaptive Lasso
 
-#### Adaptive Lasso - Ridge
+### 5.5.1 Adaptive Lasso - Ridge
 
 ```{r}
 # Adaptive Lasso avec ridge en première étape
@@ -640,7 +642,7 @@ resultats_alasso_ridge
 
 ```
 
-#### Adaptive Lasso - Lasso
+### 5.5.2 Adaptive Lasso - Lasso
 
 ```{r}
 # Adaptive Lasso avec lasso en première étape
@@ -710,16 +712,17 @@ resultats_alasso_lasso
 ```
 
 
-## 7) Comparaison sous forme de tableau des variables sélectionnées par les différentes approches en reportant ces variables sélectionnées estimées par les MCO
+# 6) Comparaison sous forme de tableau des variables sélectionnées par les différentes approches en reportant ces variables sélectionnées estimées par les MCO
 
-### Tableau des hyperparamètres
+## 6.1 Tableau des hyperparamètres
 
 ```{r}
 hyperparam_wide <- data.frame(
   Paramètre = c("Lambda", "Alpha"),
   Ridge = c(round(lambda_cv_ridge, 5), 0),
   Lasso = c(round(lambda_cv_lasso, 5), 1),
-  `Elastic-Net` = c(round(lambda_cv_en, 5), 0.5),
+  `Elastic-Net fixed` = c(round(lambda_cv_en, 5), 0.5),
+  `Elastic-Net Grid search ` = c(round(lambda_cv, 5),elasticnet_cvm ),
   SCAD = c(round(lambda_SCAD, 5), NA),
   `Adaptive Lasso Lasso` = c(round(lambda_cv_adalasso_lasso, 5), 1),
   `Adaptive Lasso Ridge` = c(round(lambda_cv_adalasso_r, 5), 1))
@@ -732,7 +735,7 @@ hyperparam_wide |>
   kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
 ```
 
-# Tableau des coefficients des Beta + MCO
+## 6.3 MCO
 
 ```{r}
 # Estimation du modèle MCO sur toutes les données
@@ -785,7 +788,7 @@ AIC_MCO
 MSE_CV_MCO
 ```
 
-## Vérification hyp MCO 
+## 6.3.1 Vérification hyp MCO 
 
 ```{r}
 # Homoscédacticité 
@@ -795,7 +798,7 @@ bgtest(lm, order = 12)
 # test RESET de Ramsey
 resettest(lm, power = 2:3, type = "fitted")
 ```
-
+## 6.4 Tableau coef synthèse 
 ```{r}
 # Extraction des coefficients et p-values avec retrait de l'intercept
 coefs_mco <- summary_mco$coefficients[-1, , drop = FALSE]
@@ -976,7 +979,7 @@ write_xlsx(
 ```
 
 
-# Tableau 
+## 6.6  Tableau coef complet 
 
 ```{r}
 # Estimation du modèle MCO
@@ -1066,6 +1069,7 @@ compar_tab_filtered |>
   kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
 ```
 
+## 6.7 Tableau recap 
 ```{r}
 # Tableau récapitulatif de toutes les méthodes
 resultats_tous <- rbind(

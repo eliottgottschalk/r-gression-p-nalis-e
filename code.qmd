@@ -427,11 +427,11 @@ en_cv <- cv.glmnet(x, y, alpha = elasticnet_cvm, lambda = lambdas_to_try, standa
 plot(en_cv)
 
 #meilleur lambda
-lambda_cv <- en_cv$lambda.min
-lambda_cv
+lambda_cv_grid <- en_cv$lambda.min
+lambda_cv_grid
 
 # modele final
-model_cv <- glmnet(x, y, alpha = elasticnet_cvm, lambda = lambda_cv, standardize = T)
+model_cv <- glmnet(x, y, alpha = elasticnet_cvm, lambda = lambda_cv_grid, standardize = T)
 
 model_cv$beta
 
@@ -468,7 +468,7 @@ AIC_eng <- n * log(RSS_eng / n) + 2 * (k_eng + 1)
 # Tableau recapitulatif pour EN
 resultats_en_gird <- data.frame(
   methode      = "EN Grid",
-  lambda       = lambda_cv,
+  lambda       = lambda_cv_grid,
   nb_variables = sum(model_cv$beta != 0),
   cv_mse       = en_cv_mse,
   r2_in_sample = r2_in_sample,
@@ -486,7 +486,7 @@ alpha_f <- 0.5
 lambda_f <- lambda_cv_en
 
 alpha_g <- elasticnet_cvm
-lambda_g <- lambda_cv
+lambda_g <- lambda_cv_grid
 
 # Décomposition de la pénalisation
 lambda_L1_f <- lambda_f * alpha_f
@@ -647,8 +647,8 @@ resultats_alasso_ridge
 ```{r}
 # Adaptive Lasso avec lasso en première étape
 set.seed(1)
-model_cv_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
-coef_lasso<-predict(model_cv_lasso,type="coef",s=lambda_cv)
+model_cv_lasso <- glmnet(x, y, alpha = 1, lambda = lambda_cv_lasso, standardize = T)
+coef_lasso<-predict(model_cv_lasso,type="coef",s=lambda_cv_lasso)
 # poids avec gamma = 0.5
 gamma=0.5
 w0<-1/(abs(coef_lasso) + (1/length(y)))
@@ -722,7 +722,7 @@ hyperparam_wide <- data.frame(
   Ridge = c(round(lambda_cv_ridge, 5), 0),
   Lasso = c(round(lambda_cv_lasso, 5), 1),
   `Elastic-Net fixed` = c(round(lambda_cv_en, 5), 0.5),
-  `Elastic-Net Grid search ` = c(round(lambda_cv, 5),elasticnet_cvm ),
+  `Elastic-Net Grid search ` = c(round(lambda_cv_grid, 5),elasticnet_cvm ),
   SCAD = c(round(lambda_SCAD, 5), NA),
   `Adaptive Lasso Lasso` = c(round(lambda_cv_adalasso_lasso, 5), 1),
   `Adaptive Lasso Ridge` = c(round(lambda_cv_adalasso_r, 5), 1))

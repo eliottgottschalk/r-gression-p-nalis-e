@@ -802,7 +802,7 @@ bgtest(lm, order = 12)
 # test RESET de Ramsey
 resettest(lm, power = 2:3, type = "fitted")
 ```
-## 6.4 Tableau coef synthèse 
+## 6.4 Tableau coef  
 ```{r}
 # Extraction des coefficients et p-values avec retrait de l'intercept
 coefs_mco <- summary_mco$coefficients[-1, , drop = FALSE]
@@ -983,97 +983,7 @@ write_xlsx(
 ```
 
 
-## 6.6  Tableau coef complet 
-
-```{r}
-# Estimation du modèle MCO
-lm <- lm(y ~ x)
-summary_mco <- summary(lm)
-
-# Extraction des coefficients et p-values avec retrait de l'intercept
-coefs_mco <- summary_mco$coefficients[-1, , drop = FALSE]
-var_names <- colnames(x)
-rownames(coefs_mco) <- var_names
-
-# Préparation du tableau MCO uniquement pour les coefficients significatifs
-mco_df <- data.frame(
-  Variable = rownames(coefs_mco),
-  Coefficient = coefs_mco[, "Estimate"],
-  p_value = coefs_mco[, "Pr(>|t|)"]
-) |>
-  mutate(
-    Significance = case_when(
-      p_value < 0.01 ~ "***",
-      p_value < 0.05 ~ "**",
-      p_value < 0.10 ~ "*",
-      TRUE ~ ""
-    ),
-    `Coeff. (MCO)` = ifelse(
-      p_value < 0.10,
-      paste0(round(Coefficient, 4), Significance),
-      ""
-    )
-  ) |>
-  select(Variable, `Coeff. (MCO)`)
-
-# Extraction des coefficients des méthodes pénalisées
-get_beta_glmnet <- function(model, var_names, lambda){
-  beta <- as.vector(coef(model, s = lambda))
-  beta <- beta[-1]
-  names(beta) <- var_names
-  return(beta)
-}
-
-beta_ridge <- get_beta_glmnet(model_cv_ridge, var_names, lambda = ridge_cv$lambda.min)
-
-beta_lasso <- get_beta_glmnet(model_cv_lasso, var_names, lambda = lasso_cv$lambda.min)
-
-beta_en    <- get_beta_glmnet(model_cv_en, var_names, lambda = en_cv$lambda.min)
-
-beta_adalasso <- get_beta_glmnet(model_cv_adalasso_lasso, var_names, lambda = fit_cv_adalasso_lasso$lambda.min)
-
-beta_adalasso_r <- get_beta_glmnet(model_cv_adalasso_r, var_names, lambda = fit_cv_adalasso_r$lambda.min)
-
-beta_scad <- as.vector(SCAD_Final$beta[-1])
-names(beta_scad) <- var_names
-
-# Tableau complet
-compar_tab <- data.frame(
-  Variable = var_names,
-  `MCO` = mco_df$`Coeff. (MCO)`[match(var_names, mco_df$Variable)],
-  Ridge = round(beta_ridge, 4),
-  Lasso = round(beta_lasso, 4),
-  `Elastic Net` = round(beta_en, 4),
-  SCAD = round(beta_scad, 4),
-  `Adaptive Lasso (Lasso)` = round(beta_adalasso, 4),
-  `Adaptive Lasso (Ridge)` = round(beta_adalasso_r, 4),
-  check.names = FALSE
-)
-
-# Filtrage : ne garder que les variables sélectionnées par AU MOINS UNE méthode autre que Ridge
-compar_tab_filtered <- compar_tab |>
-  filter(
-    (`Lasso` != 0) |
-    (`Elastic Net` != 0) |
-    (`SCAD` != 0) |
-    (`Adaptive Lasso (Lasso)` != 0) |
-    (`Adaptive Lasso (Ridge)` != 0)
-  )
-
-# Optionnel : remplacer les 0 restants par vide pour lisibilité
-compar_tab_filtered <- compar_tab_filtered |>
-  mutate(across(-Variable, ~ ifelse(. == 0, "", .)))
-
-# Affichage du tableau final
-compar_tab_filtered |>
-  kable(
-    caption = "Comparaison des coefficients estimés par différentes méthodes pénalisées (variables sélectionnées par au moins une méthode autre que Ridge)",
-    digits = 4
-  ) |>
-  kable_styling(full_width = FALSE, position = "center", bootstrap_options = c("striped", "hover"))
-```
-
-## 6.7 Tableau recap 
+## 6.5 Tableau recap 
 ```{r}
 # Tableau récapitulatif de toutes les méthodes
 resultats_tous <- rbind(
